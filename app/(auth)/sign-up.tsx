@@ -1,15 +1,17 @@
+import { useAuth } from '@/context/auth';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,6 +20,27 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { signUp } = useAuth();
+
+  async function handleSignUp() {
+    if (!name || !email || !password || !confirmPassword) {
+      Alert.alert('Error', 'Please fill in all fields.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await signUp(email, password);
+    } catch (e: any) {
+      Alert.alert('Sign up failed', e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <LinearGradient
@@ -75,8 +98,8 @@ export default function SignUpScreen() {
               secureTextEntry
             />
 
-            <TouchableOpacity style={styles.signUpButton} activeOpacity={0.85}>
-              <Text style={styles.signUpButtonText}>Create account</Text>
+            <TouchableOpacity style={styles.signUpButton} activeOpacity={0.85} onPress={handleSignUp} disabled={loading}>
+              <Text style={styles.signUpButtonText}>{loading ? 'Creating…' : 'Create account'}</Text>
             </TouchableOpacity>
           </View>
 

@@ -1,7 +1,9 @@
+import { useAuth } from '@/context/auth';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
+    Alert,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -17,6 +19,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function SignInScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { signIn } = useAuth();
+
+  async function handleSignIn() {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter your email and password.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await signIn(email, password);
+    } catch (e: any) {
+      Alert.alert('Sign in failed', e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <LinearGradient
@@ -57,8 +76,8 @@ export default function SignInScreen() {
               secureTextEntry
             />
 
-            <TouchableOpacity style={styles.signInButton} activeOpacity={0.85}>
-              <Text style={styles.signInButtonText}>Sign in</Text>
+            <TouchableOpacity style={styles.signInButton} activeOpacity={0.85} onPress={handleSignIn} disabled={loading}>
+              <Text style={styles.signInButtonText}>{loading ? 'Signing in…' : 'Sign in'}</Text>
             </TouchableOpacity>
 
             <Pressable>
