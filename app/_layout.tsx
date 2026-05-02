@@ -12,10 +12,9 @@ function RootNavigator() {
 
   useEffect(() => {
     if (loading) return;
-    if (user) {
+    if (user || true) { // remove this later
       router.replace('/(tabs)');
     } else {
-      router.replace('/(auth)/sign-in');
     }
   }, [user, loading]);
 
