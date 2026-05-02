@@ -83,6 +83,10 @@ export async function fetchPlaylistTracks(playlistId: string): Promise<AudiusTra
   return data.data;
 }
 
+export function getTrackStreamUrl(trackId: string): string {
+  return `${BASE_URL}/tracks/${trackId}/stream?app_name=MusicApp`;
+}
+
 export async function fetchTrendingPlaylists(
   params: TrendingPlaylistsParams = {}
 ): Promise<AudiusPlaylist[]> {

@@ -7,6 +7,7 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider, useAuth } from '@/context/auth';
+import { PlayerProvider } from '@/context/player';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const queryClient = new QueryClient();
@@ -41,7 +42,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <RootNavigator />
+          <PlayerProvider>
+            <RootNavigator />
+          </PlayerProvider>
         </AuthProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>

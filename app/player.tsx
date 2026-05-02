@@ -5,10 +5,12 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  GestureResponderEvent,
   Image,
+  LayoutChangeEvent,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -23,6 +25,7 @@ import Animated, {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { usePlayer, type PlayerTrack } from '@/context/player';
 import { usePlaylistTracks } from '@/hooks/use-playlists';
 import { type AudiusTrack } from '@/lib/audius';
 
@@ -109,9 +112,9 @@ function mapQueueTracks(
   });
 }
 
-function QueueTrackItem({ track }: { track: QueueTrack }) {
+function QueueTrackItem({ track, onPress }: { track: QueueTrack; onPress: () => void }) {
   return (
-    <TouchableOpacity style={styles.queueRow} activeOpacity={0.82}>
+    <TouchableOpacity style={styles.queueRow} activeOpacity={0.82} onPress={onPress}>
       <View style={[styles.queueArtworkShell, { backgroundColor: track.accentColor }]}> 
         {track.isCurrent ? (
           <Ionicons name="play" size={22} color="#fff" style={styles.queuePlayIcon} />
@@ -194,14 +197,108 @@ export default function PlayerScreen() {
       trackId: string;
     }>();
 
-  const [isPlaying, setIsPlaying] = useState(true);
+  const player = usePlayer();
+  const sheetRef = useRef<BottomSheet>(null);
   const [sheetMode, setSheetMode] = useState<PlayerSheetMode>('actions');
-  const [sheetIndex, setSheetIndex] = useState(0);
-  const total = Number(trackDuration ?? 0) || 163;
-  const progress = 0.22;
-  const elapsed = Math.round(total * progress);
+  const [sheetIndex, setSheetIndex] = useState(-1);
+  const [seekBarWidth, setSeekBarWidth] = useState(0);
+  const hasStarted = useRef(false);
+
   const bgColor = color ?? '#8B5A2B';
   const { data: playlistTracks, isPending: isQueuePending } = usePlaylistTracks(playlistId);
+  const routeDuration = Number(trackDuration ?? 0) || 163;
+  const activeTrack = player.currentTrack ?? {
+    id: trackId ?? '',
+    title: trackTitle ?? 'Unknown Track',
+    artist: trackArtist ?? 'Unknown Artist',
+    artworkUrl: artworkUrl || undefined,
+    duration: routeDuration,
+    color: bgColor,
+    playlistName: playlistName ?? '',
+    playlistId: playlistId ?? '',
+  };
+
+  const activeTrackId = activeTrack.id;
+  const activeTitle = activeTrack.title;
+  const activeArtist = activeTrack.artist;
+  const activeArtwork = activeTrack.artworkUrl;
+  const activePlaylistName = activeTrack.playlistName ?? playlistName ?? '';
+  const activeDuration = player.durationSec > 0
+    ? player.durationSec
+    : activeTrack.duration;
+  const progress = activeDuration > 0 ? player.positionSec / activeDuration : 0;
+
+  // Start playback the first time this screen mounts for this trackId
+  useEffect(() => {
+    if (hasStarted.current) return;
+
+    // Already playing this exact track — don't restart it
+    if (player.currentTrack?.id === trackId && (player.isPlaying || player.isLoading)) {
+      hasStarted.current = true;
+      return;
+    }
+
+    hasStarted.current = true;
+    const track: PlayerTrack = {
+      id: trackId ?? '',
+      title: trackTitle ?? 'Unknown Track',
+      artist: trackArtist ?? 'Unknown Artist',
+      artworkUrl: artworkUrl || undefined,
+      duration: Number(trackDuration ?? 0) || 163,
+      color: bgColor,
+      playlistName: playlistName ?? '',
+      playlistId: playlistId ?? '',
+    };
+
+    if (playlistTracks && playlistTracks.length > 0) {
+      const q: PlayerTrack[] = playlistTracks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        artist: t.user?.name ?? 'Unknown Artist',
+        artworkUrl: t.artwork?.['480x480'] ?? t.artwork?.['150x150'] ?? undefined,
+        duration: t.duration,
+        color: bgColor,
+        playlistName: playlistName ?? '',
+        playlistId: playlistId ?? '',
+      }));
+      player.playTrack(track, q);
+    } else {
+      player.playTrack(track);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackId]);
+
+  // When playlist tracks arrive after playback already started, backfill the queue
+  useEffect(() => {
+    if (!playlistTracks || playlistTracks.length === 0) return;
+    if (player.queue.length > 0) return;
+
+    const q: PlayerTrack[] = playlistTracks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      artist: t.user?.name ?? 'Unknown Artist',
+      artworkUrl: t.artwork?.['480x480'] ?? t.artwork?.['150x150'] ?? undefined,
+      duration: t.duration,
+      color: bgColor,
+      playlistName: playlistName ?? '',
+      playlistId: playlistId ?? '',
+    }));
+
+    if (!player.currentTrack) {
+      const track: PlayerTrack = {
+        id: trackId ?? '',
+        title: trackTitle ?? 'Unknown Track',
+        artist: trackArtist ?? 'Unknown Artist',
+        artworkUrl: artworkUrl || undefined,
+        duration: Number(trackDuration ?? 0) || 163,
+        color: bgColor,
+        playlistName: playlistName ?? '',
+        playlistId: playlistId ?? '',
+      };
+      player.playTrack(track, q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playlistTracks]);
   const maxSheetHeight = Math.max(
     SHEET_MID_HEIGHT + 120,
     windowHeight - topInset - SHEET_TOP_GAP,
@@ -214,32 +311,60 @@ export default function PlayerScreen() {
     if (playlistTracks?.length) {
       return mapQueueTracks(
         playlistTracks,
-        trackId,
-        trackTitle ?? 'Unknown Track',
-        trackArtist ?? 'Unknown Artist',
+        activeTrackId,
+        activeTitle,
+        activeArtist,
         bgColor,
       );
     }
 
     return buildFallbackQueueTracks(
-      trackTitle ?? 'Unknown Track',
-      trackArtist ?? 'Unknown Artist',
-      artworkUrl,
+      activeTitle,
+      activeArtist,
+      activeArtwork,
       bgColor,
     );
-  }, [bgColor, artworkUrl, playlistTracks, trackArtist, trackId, trackTitle]);
+  }, [bgColor, activeArtwork, playlistTracks, activeArtist, activeTrackId, activeTitle]);
 
   function openSheet(mode: PlayerSheetMode, nextIndex = 1) {
     setSheetMode(mode);
     setSheetIndex(nextIndex);
+    sheetRef.current?.snapToIndex(nextIndex);
+  }
+
+  function handleSeekBarLayout(e: LayoutChangeEvent) {
+    setSeekBarWidth(e.nativeEvent.layout.width);
+  }
+
+  function handleSeekBarPress(e: GestureResponderEvent) {
+    if (seekBarWidth <= 0) return;
+    const ratio = e.nativeEvent.locationX / seekBarWidth;
+    player.seek(Math.max(0, Math.min(1, ratio)) * activeDuration);
+  }
+
+  async function handleQueueTrackPress(track: QueueTrack) {
+    if (!playlistTracks) return;
+    const auTrack = playlistTracks.find((t) => t.id === track.id);
+    if (!auTrack) return;
+    const playerTrack: PlayerTrack = {
+      id: auTrack.id,
+      title: auTrack.title,
+      artist: auTrack.user?.name ?? 'Unknown Artist',
+      artworkUrl: auTrack.artwork?.['480x480'] ?? auTrack.artwork?.['150x150'] ?? undefined,
+      duration: auTrack.duration,
+      color: bgColor,
+      playlistName: playlistName ?? '',
+      playlistId: playlistId ?? '',
+    };
+    await player.playTrack(playerTrack);
   }
 
   return (
     <View style={styles.root}>
       {/* Blurred artwork background */}
-      {artworkUrl ? (
+      {activeArtwork ? (
         <Image
-          source={{ uri: artworkUrl }}
+          source={{ uri: activeArtwork }}
           style={StyleSheet.absoluteFill}
           blurRadius={25}
           resizeMode="cover"
@@ -263,7 +388,7 @@ export default function PlayerScreen() {
 
         {/* Now playing label */}
         <ThemedText style={styles.nowPlaying}>
-          Play Now: Playlist «{playlistName ?? ''}»
+          Play Now: Playlist «{activePlaylistName}»
         </ThemedText>
 
         {/* Spacer — pushes controls into the lower half */}
@@ -273,9 +398,9 @@ export default function PlayerScreen() {
         <View style={styles.mainContent}>
           {/* Song artwork */}
           <View style={styles.artworkWrapper}>
-            {artworkUrl ? (
+            {activeArtwork ? (
               <Image
-                source={{ uri: artworkUrl }}
+                source={{ uri: activeArtwork }}
                 style={styles.artwork}
                 resizeMode="cover"
               />
@@ -287,10 +412,10 @@ export default function PlayerScreen() {
           </View>
 
           <ThemedText style={styles.trackTitle} numberOfLines={2}>
-            {trackTitle ?? 'Unknown Track'}
+            {activeTitle}
           </ThemedText>
           <ThemedText style={styles.trackArtist} numberOfLines={1}>
-            {trackArtist ?? 'Unknown Artist'}
+            {activeArtist}
           </ThemedText>
 
           {/* Bookmark row above controls */}
@@ -305,22 +430,27 @@ export default function PlayerScreen() {
             <TouchableOpacity hitSlop={12} onPress={() => openSheet('actions', 1)}>
               <Ionicons name="options-outline" size={22} color="rgba(255,255,255,0.75)" />
             </TouchableOpacity>
-            <TouchableOpacity hitSlop={12}>
+            <TouchableOpacity hitSlop={12} onPress={player.skipPrevious}>
               <Ionicons name="play-skip-back" size={26} color="rgba(255,255,255,0.9)" />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.playPauseBtn}
-              onPress={() => setIsPlaying((p) => !p)}
+              onPress={player.isPlaying ? player.pause : player.resume}
               activeOpacity={0.85}
+              disabled={player.isLoading}
             >
-              <Ionicons
-                name={isPlaying ? 'pause' : 'play'}
-                size={28}
-                color="#000"
-                style={!isPlaying ? { marginLeft: 3 } : undefined}
-              />
+              {player.isLoading ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <Ionicons
+                  name={player.isPlaying ? 'pause' : 'play'}
+                  size={28}
+                  color="#000"
+                  style={!player.isPlaying ? { marginLeft: 3 } : undefined}
+                />
+              )}
             </TouchableOpacity>
-            <TouchableOpacity hitSlop={12}>
+            <TouchableOpacity hitSlop={12} onPress={player.skipNext}>
               <Ionicons name="play-skip-forward" size={26} color="rgba(255,255,255,0.9)" />
             </TouchableOpacity>
             <TouchableOpacity hitSlop={12} onPress={() => openSheet('actions', 1)}>
@@ -330,14 +460,19 @@ export default function PlayerScreen() {
 
           {/* Seek bar */}
           <View style={styles.seekContainer}>
-            <View style={styles.seekBar}>
+            <TouchableOpacity
+              style={styles.seekBar}
+              onLayout={handleSeekBarLayout}
+              onPress={handleSeekBarPress}
+              activeOpacity={1}
+            >
               <View style={styles.seekTrackBg} />
               <View style={[styles.seekFill, { width: `${progress * 100}%` }]} />
               <View style={[styles.seekThumb, { left: `${progress * 100}%` }]} />
-            </View>
+            </TouchableOpacity>
             <View style={styles.seekTimes}>
-              <ThemedText style={styles.seekTime}>{fmt(elapsed)}</ThemedText>
-              <ThemedText style={styles.seekTime}>{fmt(total)}</ThemedText>
+              <ThemedText style={styles.seekTime}>{fmt(player.positionSec)}</ThemedText>
+              <ThemedText style={styles.seekTime}>{fmt(activeDuration)}</ThemedText>
             </View>
           </View>
         </View>
@@ -354,8 +489,10 @@ export default function PlayerScreen() {
       </SafeAreaView>
 
       <BottomSheet
+        ref={sheetRef}
         index={sheetIndex}
         snapPoints={snapPoints}
+        enablePanDownToClose
         enableDynamicSizing={false}
         handleComponent={PlayerSheetHandle}
         backgroundStyle={styles.sheetBackground}
@@ -375,7 +512,7 @@ export default function PlayerScreen() {
                   {playlistTracks?.length ? 'Playlist tracks' : 'Suggested tracks'}
                 </ThemedText>
                 <ThemedText style={styles.queueHeaderTitle} numberOfLines={1}>
-                  {playlistName ?? 'Up Next'}
+                  {activePlaylistName || 'Up Next'}
                 </ThemedText>
                 <ThemedText style={styles.queueHeaderMeta} numberOfLines={1}>
                   {playlistTracks?.length ? `${queueTracks.length} tracks` : 'Picked for this session'}
@@ -389,7 +526,11 @@ export default function PlayerScreen() {
               ) : (
                 <View style={styles.queueList}>
                   {queueTracks.map((track) => (
-                    <QueueTrackItem key={track.id} track={track} />
+                    <QueueTrackItem
+                      key={track.id}
+                      track={track}
+                      onPress={() => handleQueueTrackPress(track)}
+                    />
                   ))}
                 </View>
               )}
@@ -401,8 +542,8 @@ export default function PlayerScreen() {
                   <Ionicons name="bookmark-outline" size={22} color="#fff" />
                 </TouchableOpacity>
 
-                {artworkUrl ? (
-                  <Image source={{ uri: artworkUrl }} style={styles.sheetArtwork} resizeMode="cover" />
+                {activeArtwork ? (
+                  <Image source={{ uri: activeArtwork }} style={styles.sheetArtwork} resizeMode="cover" />
                 ) : (
                   <View
                     style={[
@@ -421,10 +562,10 @@ export default function PlayerScreen() {
               </View>
 
               <ThemedText style={styles.sheetTrackTitle} numberOfLines={2}>
-                {trackTitle ?? 'Unknown Track'}
+                {activeTitle}
               </ThemedText>
               <ThemedText style={styles.sheetTrackMeta} numberOfLines={1}>
-                {trackArtist ?? 'Unknown Artist'} {' • '} {fmt(total)}
+                {activeArtist} {' • '} {fmt(activeDuration)}
               </ThemedText>
 
               <View style={styles.sheetActionList}>
