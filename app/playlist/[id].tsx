@@ -217,6 +217,8 @@ export default function PlaylistDetailScreen() {
                 router.push({
                   pathname: '/player',
                   params: {
+                    playlistId: id,
+                    trackId: item.id,
                     trackTitle: item.title,
                     trackArtist: item.user?.name ?? 'Unknown Artist',
                     trackDuration: String(item.duration),
