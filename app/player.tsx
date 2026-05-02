@@ -1,11 +1,37 @@
 import { Ionicons } from '@expo/vector-icons';
+import BottomSheet, {
+  BottomSheetScrollView,
+  type BottomSheetHandleProps,
+} from '@gorhom/bottom-sheet';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useMemo, useState } from 'react';
+import { Image, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+} from 'react-native-reanimated';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+
+const SHEET_COLLAPSED_HEIGHT = 52;
+const SHEET_MID_HEIGHT = 430;
+const SHEET_HANDLE_CLOSED_WIDTH = 52;
+const SHEET_HANDLE_OPEN_WIDTH = 40;
+const SHEET_HANDLE_TOP_SPACING = 10;
+const SHEET_TOP_GAP = 24;
+
+const PLAYER_ACTIONS = [
+  { icon: 'add-circle-outline' as const, label: 'Add to Playlist' },
+  { icon: 'person-outline' as const, label: 'Artist' },
+  { icon: 'albums-outline' as const, label: 'Album' },
+  { icon: 'thumbs-down-outline' as const, label: "I don’t like it" },
+  { icon: 'document-text-outline' as const, label: 'Song lyrics' },
+  { icon: 'download-outline' as const, label: 'Download' },
+];
 
 function fmt(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -13,7 +39,40 @@ function fmt(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function PlayerSheetHandle({ animatedIndex }: BottomSheetHandleProps) {
+  const handleContainerStyle = useAnimatedStyle(() => ({
+    paddingTop: interpolate(
+      animatedIndex?.value ?? 0,
+      [0, 1],
+      [0, SHEET_HANDLE_TOP_SPACING],
+      Extrapolation.CLAMP,
+    ),
+  }));
+
+  const handleIndicatorStyle = useAnimatedStyle(() => ({
+    width: interpolate(
+      animatedIndex?.value ?? 0,
+      [0, 1],
+      [SHEET_HANDLE_CLOSED_WIDTH, SHEET_HANDLE_OPEN_WIDTH],
+      Extrapolation.CLAMP,
+    ),
+    backgroundColor: interpolateColor(
+      animatedIndex?.value ?? 0,
+      [0, 1],
+      ['rgba(255,255,255,0.48)', 'rgba(255,255,255,0.3)'],
+    ),
+  }));
+
+  return (
+    <Animated.View style={[styles.sheetHandleContainer, handleContainerStyle]}>
+      <Animated.View style={[styles.sheetHandle, handleIndicatorStyle]} />
+    </Animated.View>
+  );
+}
+
 export default function PlayerScreen() {
+  const { height: windowHeight } = useWindowDimensions();
+  const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
   const { trackTitle, trackArtist, trackDuration, artworkUrl, playlistName, color } =
     useLocalSearchParams<{
       trackTitle: string;
@@ -29,6 +88,14 @@ export default function PlayerScreen() {
   const progress = 0.22;
   const elapsed = Math.round(total * progress);
   const bgColor = color ?? '#8B5A2B';
+  const maxSheetHeight = Math.max(
+    SHEET_MID_HEIGHT + 120,
+    windowHeight - topInset - SHEET_TOP_GAP,
+  );
+  const snapPoints = useMemo(
+    () => [SHEET_COLLAPSED_HEIGHT, SHEET_MID_HEIGHT, maxSheetHeight],
+    [maxSheetHeight],
+  );
 
   return (
     <View style={styles.root}>
@@ -131,6 +198,63 @@ export default function PlayerScreen() {
           <Ionicons name="chevron-up" size={16} color="#000" />
         </TouchableOpacity>
       </SafeAreaView>
+
+      <BottomSheet
+        index={0}
+        snapPoints={snapPoints}
+        enableDynamicSizing={false}
+        handleComponent={PlayerSheetHandle}
+        backgroundStyle={styles.sheetBackground}
+      >
+        <BottomSheetScrollView
+          contentContainerStyle={[
+            styles.sheetContent,
+            { paddingBottom: bottomInset > 0 ? bottomInset + 20 : 28 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.sheetHeaderRow}>
+            <TouchableOpacity style={styles.sheetIconBtn}>
+              <Ionicons name="bookmark-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+
+            {artworkUrl ? (
+              <Image source={{ uri: artworkUrl }} style={styles.sheetArtwork} resizeMode="cover" />
+            ) : (
+              <View style={[styles.sheetArtwork, styles.sheetArtworkPlaceholder, { backgroundColor: bgColor }]}>
+                <Ionicons name="musical-notes" size={26} color="rgba(255,255,255,0.5)" />
+              </View>
+            )}
+
+            <TouchableOpacity style={styles.sheetIconBtn}>
+              <Ionicons name="arrow-redo-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          <ThemedText style={styles.sheetTrackTitle} numberOfLines={2}>
+            {trackTitle ?? 'Unknown Track'}
+          </ThemedText>
+          <ThemedText style={styles.sheetTrackMeta} numberOfLines={1}>
+            {trackArtist ?? 'Unknown Artist'} {' • '} {fmt(total)}
+          </ThemedText>
+
+          <View style={styles.sheetActionList}>
+            {PLAYER_ACTIONS.map((action) => (
+              <TouchableOpacity key={action.label} style={styles.sheetActionRow} activeOpacity={0.8}>
+                <Ionicons name={action.icon} size={22} color="#fff" />
+                <ThemedText style={styles.sheetActionLabel}>{action.label}</ThemedText>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </BottomSheetScrollView>
+      </BottomSheet>
+
+      {bottomInset > 0 && (
+        <View
+          pointerEvents="none"
+          style={[styles.systemNavigationScrim, { height: bottomInset }]}
+        />
+      )}
     </View>
   );
 }
@@ -164,7 +288,7 @@ const styles = StyleSheet.create({
   mainContent: {
     alignItems: 'center',
     paddingHorizontal: 32,
-    paddingBottom: 16,
+    paddingBottom: 92,
   },
   bookmarkCircle: {
     width: 60,
@@ -260,5 +384,85 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#000',
+  },
+  sheetBackground: {
+    backgroundColor: '#000',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+  },
+  sheetHandleContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+  },
+  sheetHandle: {
+    width: SHEET_HANDLE_OPEN_WIDTH,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    alignSelf: 'center',
+  },
+  sheetContent: {
+    paddingHorizontal: 14,
+    paddingTop: 8,
+  },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  sheetIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetArtwork: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+  },
+  sheetArtworkPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetTrackTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  sheetTrackMeta: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.58)',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  sheetActionList: {
+    gap: 10,
+  },
+  sheetActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#242424',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  sheetActionLabel: {
+    fontSize: 16,
+    color: '#fff',
+  },
+  systemNavigationScrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000',
   },
 });
