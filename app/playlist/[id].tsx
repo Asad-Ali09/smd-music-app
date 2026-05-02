@@ -4,11 +4,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
     ActivityIndicator,
+    Dimensions,
     FlatList,
+    ScrollView,
     StyleSheet,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -21,14 +29,26 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function formatTotalDuration(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (hours > 0) return `${hours} hr ${minutes > 0 ? `${minutes} min` : ''}`.trim();
+  return `${minutes} min`;
+}
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const SHEET_HEIGHT = Math.min(SCREEN_HEIGHT * 0.65, 500);
+const PEEK_HEIGHT = 52;
+
 type TrackItemProps = {
   track: AudiusTrack;
   index: number;
+  onPress: () => void;
 };
 
-function TrackItem({ track, index }: TrackItemProps) {
+function TrackItem({ track, index, onPress }: TrackItemProps) {
   return (
-    <View style={styles.trackRow}>
+    <TouchableOpacity style={styles.trackRow} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.trackIndex}>
         <ThemedText style={styles.trackIndexText}>{index + 1}</ThemedText>
       </View>
@@ -48,17 +68,18 @@ function TrackItem({ track, index }: TrackItemProps) {
           <Ionicons name="ellipsis-horizontal" size={18} color="rgba(255,255,255,0.5)" />
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 export default function PlaylistDetailScreen() {
-  const { id, name, color, artworkUrl, trackCount } = useLocalSearchParams<{
+  const { id, name, color, artworkUrl, trackCount, description } = useLocalSearchParams<{
     id: string;
     name: string;
     color: string;
     artworkUrl: string;
     trackCount: string;
+    description: string;
   }>();
 
   const gradientTop = color ?? '#8B0000';
@@ -67,6 +88,42 @@ export default function PlaylistDetailScreen() {
   const { data: tracks, isPending, isError } = usePlaylistTracks(id);
 
   const displayTrackCount = tracks?.length ?? Number(trackCount ?? 0);
+  const totalSeconds = tracks?.reduce((sum, t) => sum + t.duration, 0) ?? 0;
+  const metaLabel = displayTrackCount > 0
+    ? `${displayTrackCount} tracks${totalSeconds > 0 ? ` • ${formatTotalDuration(totalSeconds)}` : ''}`
+    : 'Loading…';
+
+  // Bottom sheet
+  const translateY = useSharedValue(SHEET_HEIGHT - PEEK_HEIGHT);
+  const startY = useSharedValue(0);
+
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
+      startY.value = translateY.value;
+    })
+    .onUpdate((e) => {
+      translateY.value = Math.max(
+        0,
+        Math.min(SHEET_HEIGHT - PEEK_HEIGHT, startY.value + e.translationY),
+      );
+    })
+    .onEnd((e) => {
+      const midpoint = (SHEET_HEIGHT - PEEK_HEIGHT) / 2;
+      if (e.velocityY < -500 || translateY.value < midpoint) {
+        translateY.value = withSpring(0, { damping: 50 });
+      } else {
+        translateY.value = withSpring(SHEET_HEIGHT - PEEK_HEIGHT, { damping: 50 });
+      }
+    });
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const backdropStyle = useAnimatedStyle(() => {
+    const progress = 1 - translateY.value / (SHEET_HEIGHT - PEEK_HEIGHT);
+    return { opacity: Math.max(0, Math.min(0.55, progress * 0.55)) };
+  });
 
   return (
     <View style={styles.root}>
@@ -105,9 +162,7 @@ export default function PlaylistDetailScreen() {
 
         {/* Playlist info */}
         <ThemedText style={styles.playlistName}>{name}</ThemedText>
-        <ThemedText style={styles.playlistMeta}>
-          {displayTrackCount > 0 ? `${displayTrackCount} tracks` : 'Loading…'}
-        </ThemedText>
+        <ThemedText style={styles.playlistMeta}>{metaLabel}</ThemedText>
 
         {/* Action buttons */}
         <View style={styles.actions}>
@@ -142,11 +197,83 @@ export default function PlaylistDetailScreen() {
         <FlatList
           data={tracks}
           keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => <TrackItem track={item} index={index} />}
+          renderItem={({ item, index }) => (
+            <TrackItem
+              track={item}
+              index={index}
+              onPress={() =>
+                router.push({
+                  pathname: '/player',
+                  params: {
+                    trackTitle: item.title,
+                    trackArtist: item.user?.name ?? 'Unknown Artist',
+                    trackDuration: String(item.duration),
+                    artworkUrl: item.artwork?.['480x480'] ?? artworkUrl ?? '',
+                    playlistName: name ?? '',
+                    color: gradientTop,
+                  },
+                })
+              }
+            />
+          )}
           contentContainerStyle={styles.trackList}
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* Backdrop */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]}
+        pointerEvents="none"
+      />
+
+      {/* Bottom sheet */}
+      <GestureDetector gesture={panGesture}>
+        <Animated.View style={[styles.sheet, { height: SHEET_HEIGHT }, sheetStyle]}>
+          {/* Drag handle */}
+          <View style={styles.sheetHandle} />
+
+          {/* Header row: bookmark | artwork | share */}
+          <View style={styles.sheetHeaderRow}>
+            <TouchableOpacity style={styles.sheetIconBtn}>
+              <Ionicons name="bookmark-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+
+            <View style={styles.sheetArtworkWrapper}>
+              {artworkUrl ? (
+                <Image
+                  source={{ uri: artworkUrl }}
+                  style={styles.sheetArtwork}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.sheetArtwork, { backgroundColor: gradientTop, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons name="musical-notes" size={28} color="rgba(255,255,255,0.5)" />
+                </View>
+              )}
+            </View>
+
+            <TouchableOpacity style={styles.sheetIconBtn}>
+              <Ionicons name="arrow-redo-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Playlist name & meta */}
+          <ThemedText style={styles.sheetName}>{name}</ThemedText>
+          <ThemedText style={styles.sheetMeta}>{metaLabel}</ThemedText>
+
+          {/* Description */}
+          <ScrollView
+            style={styles.sheetDescScroll}
+            showsVerticalScrollIndicator={false}
+            scrollEnabled
+          >
+            <ThemedText style={description ? styles.sheetDescription : styles.sheetDescriptionEmpty}>
+              {description || 'No description available.'}
+            </ThemedText>
+          </ScrollView>
+        </Animated.View>
+      </GestureDetector>
     </View>
   );
 }
@@ -291,5 +418,85 @@ const styles = StyleSheet.create({
     color: '#ff6b6b',
     fontSize: 15,
     textAlign: 'center',
+  },
+  // ── Bottom sheet ──────────────────────────────────────────
+  backdrop: {
+    backgroundColor: '#000',
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#111',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    marginTop: 10
+  },
+  sheetIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetArtworkWrapper: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  sheetArtwork: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  sheetName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  sheetMeta: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  sheetDescScroll: {
+    flex: 1,
+  },
+  sheetDescription: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.75)',
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  sheetDescriptionEmpty: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.35)',
+    lineHeight: 22,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

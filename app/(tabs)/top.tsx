@@ -75,6 +75,7 @@ export default function TopScreen() {
                     color,
                     artworkUrl: playlist.artwork?.['480x480'] ?? '',
                     trackCount: playlist.track_count,
+                    description: playlist.description ?? '',
                   },
                 })
               }
