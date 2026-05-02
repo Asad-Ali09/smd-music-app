@@ -1,23 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
+import BottomSheet, {
+    BottomSheetView,
+    type BottomSheetHandleProps,
+} from '@gorhom/bottom-sheet';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo } from 'react';
 import {
     ActivityIndicator,
-    Dimensions,
     FlatList,
-    ScrollView,
     StyleSheet,
     TouchableOpacity,
     View,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+    Extrapolation,
+    interpolate,
+    interpolateColor,
     useAnimatedStyle,
-    useSharedValue,
-    withSpring,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { usePlaylistTracks } from '@/hooks/use-playlists';
@@ -36,9 +39,11 @@ function formatTotalDuration(totalSeconds: number): string {
   return `${minutes} min`;
 }
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SHEET_HEIGHT = Math.min(SCREEN_HEIGHT * 0.65, 500);
-const PEEK_HEIGHT = 52;
+const SHEET_EXPANDED_HEIGHT = 500;
+const SHEET_COLLAPSED_HEIGHT = 52;
+const SHEET_HANDLE_CLOSED_WIDTH = 52;
+const SHEET_HANDLE_OPEN_WIDTH = 40;
+const SHEET_HANDLE_TOP_SPACING = 10;
 
 type TrackItemProps = {
   track: AudiusTrack;
@@ -72,7 +77,41 @@ function TrackItem({ track, index, onPress }: TrackItemProps) {
   );
 }
 
+function PlaylistSheetHandle({
+  animatedIndex,
+}: BottomSheetHandleProps) {
+  const handleContainerStyle = useAnimatedStyle(() => ({
+    paddingTop: interpolate(
+      animatedIndex?.value ?? 0,
+      [0, 1],
+      [0, SHEET_HANDLE_TOP_SPACING],
+      Extrapolation.CLAMP,
+    ),
+  }));
+
+  const handleIndicatorStyle = useAnimatedStyle(() => ({
+    width: interpolate(
+      animatedIndex?.value ?? 0,
+      [0, 1],
+      [SHEET_HANDLE_CLOSED_WIDTH, SHEET_HANDLE_OPEN_WIDTH],
+      Extrapolation.CLAMP,
+    ),
+    backgroundColor: interpolateColor(
+      animatedIndex?.value ?? 0,
+      [0, 1],
+      ['rgba(255,255,255,0.48)', 'rgba(255,255,255,0.3)'],
+    ),
+  }));
+
+  return (
+    <Animated.View style={[styles.sheetHandleContainer, handleContainerStyle]}>
+      <Animated.View style={[styles.sheetHandle, handleIndicatorStyle]} />
+    </Animated.View>
+  );
+}
+
 export default function PlaylistDetailScreen() {
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const { id, name, color, artworkUrl, trackCount, description } = useLocalSearchParams<{
     id: string;
     name: string;
@@ -93,37 +132,10 @@ export default function PlaylistDetailScreen() {
     ? `${displayTrackCount} tracks${totalSeconds > 0 ? ` • ${formatTotalDuration(totalSeconds)}` : ''}`
     : 'Loading…';
 
-  // Bottom sheet
-  const translateY = useSharedValue(SHEET_HEIGHT - PEEK_HEIGHT);
-  const startY = useSharedValue(0);
-
-  const panGesture = Gesture.Pan()
-    .onStart(() => {
-      startY.value = translateY.value;
-    })
-    .onUpdate((e) => {
-      translateY.value = Math.max(
-        0,
-        Math.min(SHEET_HEIGHT - PEEK_HEIGHT, startY.value + e.translationY),
-      );
-    })
-    .onEnd((e) => {
-      const midpoint = (SHEET_HEIGHT - PEEK_HEIGHT) / 2;
-      if (e.velocityY < -500 || translateY.value < midpoint) {
-        translateY.value = withSpring(0, { damping: 50 });
-      } else {
-        translateY.value = withSpring(SHEET_HEIGHT - PEEK_HEIGHT, { damping: 50 });
-      }
-    });
-
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  const backdropStyle = useAnimatedStyle(() => {
-    const progress = 1 - translateY.value / (SHEET_HEIGHT - PEEK_HEIGHT);
-    return { opacity: Math.max(0, Math.min(0.55, progress * 0.55)) };
-  });
+  const snapPoints = useMemo(
+    () => [SHEET_COLLAPSED_HEIGHT, SHEET_EXPANDED_HEIGHT],
+    [],
+  );
 
   return (
     <View style={styles.root}>
@@ -221,18 +233,14 @@ export default function PlaylistDetailScreen() {
         />
       )}
 
-      {/* Backdrop */}
-      <Animated.View
-        style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]}
-        pointerEvents="none"
-      />
-
-      {/* Bottom sheet */}
-      <GestureDetector gesture={panGesture}>
-        <Animated.View style={[styles.sheet, { height: SHEET_HEIGHT }, sheetStyle]}>
-          {/* Drag handle */}
-          <View style={styles.sheetHandle} />
-
+      <BottomSheet
+        index={0}
+        snapPoints={snapPoints}
+        enableDynamicSizing={false}
+        handleComponent={PlaylistSheetHandle}
+        backgroundStyle={styles.sheetBackground}
+      >
+        <BottomSheetView style={[styles.sheetScroll, styles.sheetContent]}>
           {/* Header row: bookmark | artwork | share */}
           <View style={styles.sheetHeaderRow}>
             <TouchableOpacity style={styles.sheetIconBtn}>
@@ -247,7 +255,13 @@ export default function PlaylistDetailScreen() {
                   contentFit="cover"
                 />
               ) : (
-                <View style={[styles.sheetArtwork, { backgroundColor: gradientTop, alignItems: 'center', justifyContent: 'center' }]}>
+                <View
+                  style={[
+                    styles.sheetArtwork,
+                    styles.sheetArtworkPlaceholder,
+                    { backgroundColor: gradientTop },
+                  ]}
+                >
                   <Ionicons name="musical-notes" size={28} color="rgba(255,255,255,0.5)" />
                 </View>
               )}
@@ -263,17 +277,18 @@ export default function PlaylistDetailScreen() {
           <ThemedText style={styles.sheetMeta}>{metaLabel}</ThemedText>
 
           {/* Description */}
-          <ScrollView
-            style={styles.sheetDescScroll}
-            showsVerticalScrollIndicator={false}
-            scrollEnabled
-          >
-            <ThemedText style={description ? styles.sheetDescription : styles.sheetDescriptionEmpty}>
-              {description || 'No description available.'}
-            </ThemedText>
-          </ScrollView>
-        </Animated.View>
-      </GestureDetector>
+          <ThemedText style={description ? styles.sheetDescription : styles.sheetDescriptionEmpty}>
+            {description || 'No description available.'}
+          </ThemedText>
+        </BottomSheetView>
+      </BottomSheet>
+
+      {bottomInset > 0 && (
+        <View
+          pointerEvents="none"
+          style={[styles.systemNavigationScrim, { height: bottomInset }]}
+        />
+      )}
     </View>
   );
 }
@@ -419,36 +434,36 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: 'center',
   },
-  // ── Bottom sheet ──────────────────────────────────────────
-  backdrop: {
-    backgroundColor: '#000',
-  },
-  sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  sheetBackground: {
     backgroundColor: '#111',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 40,
+  },
+  sheetHandleContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingBottom: 10,
   },
   sheetHandle: {
-    width: 40,
+    width: SHEET_HANDLE_OPEN_WIDTH,
     height: 4,
     borderRadius: 2,
     backgroundColor: 'rgba(255,255,255,0.3)',
     alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 20,
+  },
+  sheetScroll: {
+    flex: 1,
+  },
+  sheetContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 40,
   },
   sheetHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
-    marginTop: 10
+    marginTop: 10,
   },
   sheetIconBtn: {
     width: 44,
@@ -470,6 +485,10 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
   },
+  sheetArtworkPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sheetName: {
     fontSize: 22,
     fontWeight: 'bold',
@@ -483,14 +502,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
   },
-  sheetDescScroll: {
-    flex: 1,
-  },
   sheetDescription: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.75)',
     lineHeight: 22,
     textAlign: 'center',
+    paddingBottom: 8,
   },
   sheetDescriptionEmpty: {
     fontSize: 14,
@@ -498,5 +515,13 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
     fontStyle: 'italic',
+    paddingBottom: 8,
+  },
+  systemNavigationScrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000',
   },
 });
