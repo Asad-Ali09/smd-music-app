@@ -91,6 +91,7 @@ export type TrendingTracksResponse = {
 };
 
 export type TrendingPlaylistsParams = {
+  type?: 'playlist' | 'album';
   time?: 'week' | 'month' | 'year' | 'allTime';
   limit?: number;
   offset?: number;
@@ -150,7 +151,7 @@ export async function fetchTrendingPlaylists(
     {
       params: {
         app_name: 'MusicApp',
-        type: 'playlist',
+        type: params.type ?? 'playlist',
         limit: params.limit ?? 20,
         ...(params.time && { time: params.time }),
         ...(params.offset !== undefined && { offset: params.offset }),

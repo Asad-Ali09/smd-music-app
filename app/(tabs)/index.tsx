@@ -23,6 +23,12 @@ const PLAYLIST_GRADIENTS: [string, string][] = [
   ['#E84C3C', '#9B2020'],
   ['#1A7BAA', '#0B3F59'],
 ];
+const ALBUM_GRADIENTS: [string, string][] = [
+  ['#D07A29', '#6C2D14'],
+  ['#4B8A77', '#1E4238'],
+  ['#6A63D9', '#2C2C73'],
+  ['#BD4F6C', '#5C1933'],
+];
 
 function formatCompactNumber(value: number): string {
   if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
@@ -79,7 +85,13 @@ export default function HomeScreen() {
     isPending: playlistsPending,
     isError: playlistsError,
   } = useTrendingPlaylists({ time: 'week', limit: 4 });
+  const {
+    data: trendingAlbums,
+    isPending: albumsPending,
+    isError: albumsError,
+  } = useTrendingPlaylists({ time: 'week', limit: 6, type: 'album' });
   const featuredPlaylists: AudiusPlaylist[] = trendingPlaylists ?? [];
+  const featuredAlbums: AudiusPlaylist[] = trendingAlbums ?? [];
 
   const newReleases = [...(trendingTracks ?? [])]
     .sort((a, b) => getReleaseTimestamp(b) - getReleaseTimestamp(a))
@@ -97,6 +109,25 @@ export default function HomeScreen() {
         artworkUrl: getPlaylistArtwork(playlist),
         trackCount: playlist.track_count,
         description: playlist.description ?? '',
+      },
+    });
+  };
+
+  const openAlbum = (album: AudiusPlaylist, colors: [string, string]) => {
+    router.push({
+      pathname: '/album/[id]',
+      params: {
+        id: album.id,
+        title: album.playlist_name,
+        artist: album.user?.name ?? 'Unknown Artist',
+        artworkUrl: getPlaylistArtwork(album),
+        description: album.description ?? '',
+        color: colors[0],
+        accent: colors[1],
+        trackCount: String(album.track_count ?? 0),
+        totalPlayCount: String(album.total_play_count ?? 0),
+        explicit: album.tracks?.some((track) => !!track.parental_warning_type) ? '1' : '0',
+        source: 'audius',
       },
     });
   };
@@ -273,6 +304,60 @@ export default function HomeScreen() {
 
         {playlistsError && featuredPlaylists.length === 0 && (
           <ThemedText style={styles.feedbackText}>Failed to load Audius playlists.</ThemedText>
+        )}
+      </View>
+
+      {/* Trending albums */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <ThemedText style={styles.sectionTitle}>Trending albums</ThemedText>
+          <TouchableOpacity>
+            <ThemedText style={styles.viewAll}>View All</ThemedText>
+          </TouchableOpacity>
+        </View>
+
+        <FlatList
+          data={featuredAlbums}
+          keyExtractor={(item) => item.id}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.horizontalList}
+          renderItem={({ item, index }) => {
+            const colors = ALBUM_GRADIENTS[index % ALBUM_GRADIENTS.length];
+            const artworkUrl = getPlaylistArtwork(item);
+
+            return (
+              <TouchableOpacity
+                style={styles.albumCard}
+                activeOpacity={0.85}
+                onPress={() => openAlbum(item, colors)}
+              >
+                {artworkUrl ? (
+                  <Image source={{ uri: artworkUrl }} style={styles.albumArtwork} contentFit="cover" />
+                ) : (
+                  <LinearGradient colors={colors} style={styles.albumArtwork} />
+                )}
+
+                <ThemedText style={styles.albumTitle} numberOfLines={2}>
+                  {item.playlist_name}
+                </ThemedText>
+                <ThemedText style={styles.albumMeta} numberOfLines={2}>
+                  {item.user?.name ?? 'Unknown Artist'}
+                  {buildPlaylistMeta(item) ? ` • ${buildPlaylistMeta(item)}` : ''}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          }}
+        />
+
+        {albumsPending && featuredAlbums.length === 0 && (
+          <View style={styles.feedbackRow}>
+            <ActivityIndicator color="#FFFFFF" />
+          </View>
+        )}
+
+        {albumsError && featuredAlbums.length === 0 && (
+          <ThemedText style={styles.feedbackText}>Failed to load Audius albums.</ThemedText>
         )}
       </View>
 
@@ -491,6 +576,30 @@ const styles = StyleSheet.create({
     color: '#8A8A8A',
     fontSize: 24,
     lineHeight: 24,
+  },
+
+  /* Albums */
+  albumCard: {
+    width: 174,
+  },
+  albumArtwork: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  albumTitle: {
+    marginTop: 10,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  albumMeta: {
+    marginTop: 4,
+    color: '#8A8A8A',
+    fontSize: 13,
+    lineHeight: 18,
   },
 
   /* Top charts */

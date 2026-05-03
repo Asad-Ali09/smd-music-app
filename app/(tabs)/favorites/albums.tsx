@@ -1,11 +1,26 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { FAVORITE_ALBUMS } from '@/lib/favorite-albums';
+import { FavoritesCategoryPlaceholder } from '@/components/favorites-category-placeholder';
+import { ThemedText } from '@/components/themed-text';
+import { useFavoriteAlbums } from '@/hooks/use-favorite-albums';
 
 export default function FavoriteAlbumsScreen() {
+  const { data, isPending, isError } = useFavoriteAlbums();
+
+  if (!isPending && !isError && data.length === 0) {
+    return (
+      <FavoritesCategoryPlaceholder
+        title="Albums"
+        message="Bookmark albums from their detail screen to keep them here for quick access."
+        icon="album"
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <View style={styles.container}>
@@ -14,15 +29,27 @@ export default function FavoriteAlbumsScreen() {
             <MaterialIcons name="arrow-back-ios-new" size={20} color="#FFFFFF" />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Albums</Text>
+          <ThemedText style={styles.headerTitle}>Albums</ThemedText>
 
           <TouchableOpacity style={styles.headerAction} activeOpacity={0.7}>
             <MaterialIcons name="menu" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
+        {isPending && (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+          </View>
+        )}
+
+        {isError && (
+          <View style={styles.centered}>
+            <ThemedText style={styles.errorText}>Failed to load albums. Please try again.</ThemedText>
+          </View>
+        )}
+
         <FlatList
-          data={FAVORITE_ALBUMS}
+          data={data}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <TouchableOpacity
@@ -31,26 +58,42 @@ export default function FavoriteAlbumsScreen() {
               onPress={() =>
                 router.push({
                   pathname: '/album/[id]',
-                  params: { id: item.id },
+                  params: {
+                    id: item.id,
+                    title: item.title,
+                    artist: item.artist,
+                    artworkUrl: item.artworkUrl,
+                    description: item.description,
+                    color: item.color,
+                    accent: item.accent,
+                    trackCount: String(item.trackCount),
+                    totalPlayCount: String(item.totalPlayCount),
+                    explicit: item.explicit ? '1' : '0',
+                    source: item.source,
+                  },
                 })
               }
             >
-              <View style={[styles.artwork, { backgroundColor: item.color }]} />
+              <View style={[styles.artwork, { backgroundColor: item.color }]}> 
+                {item.artworkUrl ? (
+                  <Image source={{ uri: item.artworkUrl }} style={styles.artworkImage} contentFit="cover" />
+                ) : null}
+              </View>
 
               <View style={styles.rowContent}>
-                <Text style={styles.albumTitle} numberOfLines={1}>
+                <ThemedText style={styles.albumTitle} numberOfLines={1}>
                   {item.title}
-                </Text>
-                <Text style={styles.artist} numberOfLines={1}>
+                </ThemedText>
+                <ThemedText style={styles.artist} numberOfLines={1}>
                   {item.artist}
-                </Text>
-                <Text style={styles.year}>{item.year}</Text>
+                </ThemedText>
+                <ThemedText style={styles.year} numberOfLines={1}>{item.meta}</ThemedText>
               </View>
 
               <View style={styles.actions}>
                 {item.explicit ? (
                   <View style={styles.explicitBadge}>
-                    <Text style={styles.explicitBadgeText}>E</Text>
+                    <ThemedText style={styles.explicitBadgeText}>E</ThemedText>
                   </View>
                 ) : null}
                 <TouchableOpacity style={styles.moreButton} activeOpacity={0.7}>
@@ -95,6 +138,17 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#FFFFFF',
   },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
+  },
+  errorText: {
+    color: '#ff6b6b',
+    fontSize: 15,
+    textAlign: 'center',
+  },
   listContent: {
     paddingTop: 8,
     paddingBottom: 220,
@@ -109,6 +163,11 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 6,
     marginRight: 14,
+    overflow: 'hidden',
+  },
+  artworkImage: {
+    width: '100%',
+    height: '100%',
   },
   rowContent: {
     flex: 1,
