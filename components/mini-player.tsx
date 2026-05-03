@@ -52,6 +52,7 @@ export function MiniPlayer() {
         trackArtist: currentTrack.artist,
         trackDuration: String(currentTrack.duration),
         artworkUrl: currentTrack.artworkUrl ?? '',
+        localFileUri: currentTrack.localFileUri ?? '',
         playlistName: currentTrack.playlistName ?? '',
         color: currentTrack.color ?? '#1a1a1a',
         playlistId: currentTrack.playlistId ?? '',

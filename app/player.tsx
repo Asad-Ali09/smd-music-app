@@ -27,6 +27,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { usePlayer, type PlayerTrack } from '@/context/player';
+import { useDownloadedTracks } from '@/hooks/use-downloaded-tracks';
 import { useFavoriteTracks } from '@/hooks/use-favorite-tracks';
 import { usePlaylistTracks } from '@/hooks/use-playlists';
 import { type AudiusTrack } from '@/lib/audius';
@@ -184,6 +185,7 @@ export default function PlayerScreen() {
     trackArtist,
     trackDuration,
     artworkUrl,
+    localFileUri,
     playlistName,
     color,
     playlistId,
@@ -194,6 +196,7 @@ export default function PlayerScreen() {
       trackArtist: string;
       trackDuration: string;
       artworkUrl: string;
+      localFileUri: string;
       playlistName: string;
       color: string;
       playlistId: string;
@@ -201,6 +204,8 @@ export default function PlayerScreen() {
     }>();
 
   const player = usePlayer();
+  const { data: downloadedTracks, downloadedIds, isDownloadPending, downloadTrack } =
+    useDownloadedTracks();
   const { favoriteIds, isFavoritePending, toggleFavoriteTrack } = useFavoriteTracks();
   const sheetRef = useRef<BottomSheet>(null);
   const [sheetMode, setSheetMode] = useState<PlayerSheetMode>('actions');
@@ -211,11 +216,13 @@ export default function PlayerScreen() {
   const bgColor = color ?? '#8B5A2B';
   const { data: playlistTracks, isPending: isQueuePending } = usePlaylistTracks(playlistId);
   const routeDuration = Number(trackDuration ?? 0) || 163;
+  const downloadedActiveTrack = downloadedTracks.find((track) => track.id === trackId);
   const activeTrack = player.currentTrack ?? {
     id: trackId ?? '',
     title: trackTitle ?? 'Unknown Track',
     artist: trackArtist ?? 'Unknown Artist',
-    artworkUrl: artworkUrl || undefined,
+    artworkUrl: downloadedActiveTrack?.artworkFileUri || artworkUrl || undefined,
+    localFileUri: downloadedActiveTrack?.audioFileUri || localFileUri || undefined,
     duration: routeDuration,
     color: bgColor,
     playlistName: playlistName ?? '',
@@ -225,8 +232,10 @@ export default function PlayerScreen() {
   const activeTrackId = activeTrack.id;
   const activeTitle = activeTrack.title;
   const activeArtist = activeTrack.artist;
-  const activeArtwork = activeTrack.artworkUrl;
+  const activeArtwork = downloadedActiveTrack?.artworkFileUri || activeTrack.artworkUrl;
   const activePlaylistName = activeTrack.playlistName ?? playlistName ?? '';
+  const isDownloaded = !!activeTrackId && downloadedIds.has(activeTrackId);
+  const downloadPending = !!activeTrackId && isDownloadPending(activeTrackId);
   const isFavorite = !!activeTrackId && favoriteIds.has(activeTrackId);
   const favoritePending = !!activeTrackId && isFavoritePending(activeTrackId);
   const activeDuration = player.durationSec > 0
@@ -249,7 +258,8 @@ export default function PlayerScreen() {
       id: trackId ?? '',
       title: trackTitle ?? 'Unknown Track',
       artist: trackArtist ?? 'Unknown Artist',
-      artworkUrl: artworkUrl || undefined,
+      artworkUrl: downloadedActiveTrack?.artworkFileUri || artworkUrl || undefined,
+      localFileUri: downloadedActiveTrack?.audioFileUri || localFileUri || undefined,
       duration: Number(trackDuration ?? 0) || 163,
       color: bgColor,
       playlistName: playlistName ?? '',
@@ -272,7 +282,7 @@ export default function PlayerScreen() {
       player.playTrack(track);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackId]);
+  }, [trackId, downloadedActiveTrack, localFileUri]);
 
   // When playlist tracks arrive after playback already started, backfill the queue
   useEffect(() => {
@@ -295,7 +305,8 @@ export default function PlayerScreen() {
         id: trackId ?? '',
         title: trackTitle ?? 'Unknown Track',
         artist: trackArtist ?? 'Unknown Artist',
-        artworkUrl: artworkUrl || undefined,
+        artworkUrl: downloadedActiveTrack?.artworkFileUri || artworkUrl || undefined,
+        localFileUri: downloadedActiveTrack?.audioFileUri || localFileUri || undefined,
         duration: Number(trackDuration ?? 0) || 163,
         color: bgColor,
         playlistName: playlistName ?? '',
@@ -304,7 +315,7 @@ export default function PlayerScreen() {
       player.playTrack(track, q);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playlistTracks]);
+  }, [playlistTracks, downloadedActiveTrack, localFileUri]);
   const maxSheetHeight = Math.max(
     SHEET_MID_HEIGHT + 120,
     windowHeight - topInset - SHEET_TOP_GAP,
@@ -356,7 +367,12 @@ export default function PlayerScreen() {
       id: auTrack.id,
       title: auTrack.title,
       artist: auTrack.user?.name ?? 'Unknown Artist',
-      artworkUrl: auTrack.artwork?.['480x480'] ?? auTrack.artwork?.['150x150'] ?? undefined,
+      artworkUrl:
+        downloadedTracks.find((downloadedTrack) => downloadedTrack.id === auTrack.id)?.artworkFileUri ||
+        auTrack.artwork?.['480x480'] ||
+        auTrack.artwork?.['150x150'] ||
+        undefined,
+      localFileUri: downloadedTracks.find((downloadedTrack) => downloadedTrack.id === auTrack.id)?.audioFileUri,
       duration: auTrack.duration,
       color: bgColor,
       playlistName: playlistName ?? '',
@@ -385,6 +401,27 @@ export default function PlayerScreen() {
       );
     } catch {
       Alert.alert('Favorite failed', 'Unable to update this track in favorites right now.');
+    }
+  }
+
+  async function handleDownloadTrack() {
+    if (!activeTrackId) {
+      return;
+    }
+
+    try {
+      await downloadTrack({
+        id: activeTrackId,
+        title: activeTitle,
+        artist: activeArtist,
+        artworkUrl: typeof activeArtwork === 'string' ? activeArtwork : artworkUrl,
+        duration: activeDuration,
+        color: bgColor,
+        playlistName: activePlaylistName,
+        playlistId: activeTrack.playlistId ?? playlistId ?? '',
+      });
+    } catch {
+      Alert.alert('Download failed', 'Unable to save this track for offline playback right now.');
     }
   }
 
@@ -611,8 +648,17 @@ export default function PlayerScreen() {
                     key={action.label}
                     style={styles.sheetActionRow}
                     activeOpacity={0.8}
-                    onPress={action.key === 'favorite' ? () => void handleToggleFavoriteTrack() : undefined}
-                    disabled={action.key === 'favorite' && favoritePending}
+                    onPress={
+                      action.key === 'favorite'
+                        ? () => void handleToggleFavoriteTrack()
+                        : action.key === 'download'
+                          ? () => void handleDownloadTrack()
+                          : undefined
+                    }
+                    disabled={
+                      (action.key === 'favorite' && favoritePending) ||
+                      (action.key === 'download' && (downloadPending || isDownloaded))
+                    }
                   >
                     <Ionicons name={action.icon} size={22} color="#fff" />
                     <ThemedText style={styles.sheetActionLabel}>
@@ -620,6 +666,10 @@ export default function PlayerScreen() {
                         ? isFavorite
                           ? 'Remove from favorites'
                           : action.label
+                        : action.key === 'download'
+                          ? isDownloaded
+                            ? 'Downloaded'
+                            : action.label
                         : action.label}
                     </ThemedText>
                   </TouchableOpacity>

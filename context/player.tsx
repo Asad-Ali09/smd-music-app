@@ -8,11 +8,14 @@ import React, {
     useState,
 } from 'react';
 
+import { getTrackStreamUrl } from '@/lib/audius';
+
 export type PlayerTrack = {
   id: string;
   title: string;
   artist: string;
   artworkUrl?: string;
+  localFileUri?: string;
   duration: number;
   color?: string;
   playlistName?: string;
@@ -129,9 +132,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setPositionSec(0);
         setDurationSec(track.duration);
 
-        const streamUrl = `https://api.audius.co/v1/tracks/${track.id}/stream?app_name=MusicApp`;
+        const audioUri = track.localFileUri ?? getTrackStreamUrl(track.id);
         const { sound } = await Audio.Sound.createAsync(
-          { uri: streamUrl },
+          { uri: audioUri },
           { shouldPlay: true, progressUpdateIntervalMillis: 500 },
           handlePlaybackStatus,
         );

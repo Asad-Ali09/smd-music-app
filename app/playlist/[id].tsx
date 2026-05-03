@@ -24,6 +24,7 @@ import Animated, {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { useDownloadedTracks } from '@/hooks/use-downloaded-tracks';
 import { useFavoritePlaylists } from '@/hooks/use-favorite-playlists';
 import { useFavoriteTracks } from '@/hooks/use-favorite-tracks';
 import { usePlaylistTracks } from '@/hooks/use-playlists';
@@ -55,6 +56,7 @@ type TrackItemProps = {
   index: number;
   isMenuOpen: boolean;
   isFavorite: boolean;
+  isDownloaded: boolean;
   onPress: () => void;
   onMorePress: () => void;
   onAddToFavorites: () => void;
@@ -66,6 +68,7 @@ function TrackItem({
   index,
   isMenuOpen,
   isFavorite,
+  isDownloaded,
   onPress,
   onMorePress,
   onAddToFavorites,
@@ -128,7 +131,7 @@ function TrackItem({
                 onDownload();
               }}
             >
-              <ThemedText style={styles.trackMenuText}>Download</ThemedText>
+              <ThemedText style={styles.trackMenuText}>{isDownloaded ? 'Downloaded' : 'Download'}</ThemedText>
             </TouchableOpacity>
           </View>
         )}
@@ -188,6 +191,7 @@ export default function PlaylistDetailScreen() {
   const gradientBottom = '#000000';
 
   const { data: tracks, isPending, isError } = usePlaylistTracks(id);
+  const { downloadedIds, downloadTrack } = useDownloadedTracks();
   const { data: favoritePlaylists, favoriteIds, isBookmarkPending, toggleFavoritePlaylist } =
     useFavoritePlaylists();
   const { favoriteIds: favoriteTrackIds, toggleFavoriteTrack } = useFavoriteTracks();
@@ -246,10 +250,6 @@ export default function PlaylistDetailScreen() {
     setOpenTrackMenuId(null);
   }
 
-  function handleTrackMenuAction() {
-    closeTrackMenu();
-  }
-
   async function handleAddTrackToFavorites(track: AudiusTrack) {
     try {
       await toggleFavoriteTrack(
@@ -267,6 +267,24 @@ export default function PlaylistDetailScreen() {
       closeTrackMenu();
     } catch {
       Alert.alert('Favorite failed', 'Unable to update this track in favorites right now.');
+    }
+  }
+
+  async function handleDownloadTrack(track: AudiusTrack) {
+    try {
+      await downloadTrack({
+        id: track.id,
+        title: track.title,
+        artist: track.user?.name ?? 'Unknown Artist',
+        artworkUrl: track.artwork?.['480x480'] ?? track.artwork?.['150x150'] ?? artworkUrl ?? '',
+        duration: track.duration,
+        color: gradientTop,
+        playlistName: name ?? '',
+        playlistId: id ?? '',
+      });
+      closeTrackMenu();
+    } catch {
+      Alert.alert('Download failed', 'Unable to save this track for offline playback right now.');
     }
   }
 
@@ -356,9 +374,10 @@ export default function PlaylistDetailScreen() {
               index={index}
               isMenuOpen={openTrackMenuId === item.id}
               isFavorite={favoriteTrackIds.has(item.id)}
+              isDownloaded={downloadedIds.has(item.id)}
               onMorePress={() => handleTrackOptions(item.id)}
               onAddToFavorites={() => void handleAddTrackToFavorites(item)}
-              onDownload={handleTrackMenuAction}
+              onDownload={() => void handleDownloadTrack(item)}
               onPress={() =>
                 (() => {
                   closeTrackMenu();

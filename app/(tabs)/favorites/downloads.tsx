@@ -1,11 +1,31 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DOWNLOADED_TRACKS } from '@/lib/downloaded-tracks';
+import { FavoritesCategoryPlaceholder } from '@/components/favorites-category-placeholder';
+import { useDownloadedTracks } from '@/hooks/use-downloaded-tracks';
+
+function formatDuration(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainderSeconds = seconds % 60;
+  return `${minutes}:${remainderSeconds.toString().padStart(2, '0')}`;
+}
 
 export default function FavoriteDownloadsScreen() {
+  const { data, isPending, isError } = useDownloadedTracks();
+
+  if (!isPending && !isError && data.length === 0) {
+    return (
+      <FavoritesCategoryPlaceholder
+        title="Downloads"
+        message="Downloaded tracks will appear here and play without an internet connection."
+        icon="file-download"
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <View style={styles.container}>
@@ -21,28 +41,62 @@ export default function FavoriteDownloadsScreen() {
           </TouchableOpacity>
         </View>
 
+        {isPending && (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#fff" />
+          </View>
+        )}
+
+        {isError && (
+          <View style={styles.centered}>
+            <Text style={styles.errorText}>Failed to load downloaded tracks. Please try again.</Text>
+          </View>
+        )}
+
         <FlatList
-          data={DOWNLOADED_TRACKS}
+          data={data}
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => (
-            <View style={styles.row}>
+            <TouchableOpacity
+              style={styles.row}
+              activeOpacity={0.75}
+              onPress={() =>
+                router.push({
+                  pathname: '/player',
+                  params: {
+                    playlistId: item.playlistId,
+                    trackId: item.id,
+                    trackTitle: item.title,
+                    trackArtist: item.artist,
+                    trackDuration: String(item.durationSec),
+                    artworkUrl: item.artworkFileUri || item.artworkUrl,
+                    localFileUri: item.audioFileUri,
+                    playlistName: item.playlistName,
+                    color: item.color,
+                  },
+                })
+              }
+            >
               <View style={styles.leftGroup}>
                 <View style={styles.indexWrap}>
                   <Text style={styles.indexText}>{index + 1}</Text>
                 </View>
 
-                <View style={[styles.artwork, { backgroundColor: item.color }]} />
+                {item.artworkFileUri || item.artworkUrl ? (
+                  <Image
+                    source={{ uri: item.artworkFileUri || item.artworkUrl }}
+                    style={styles.artwork}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <View style={[styles.artwork, { backgroundColor: item.color }]} />
+                )}
 
                 <View style={styles.rowContent}>
                   <View style={styles.titleRow}>
                     <Text style={styles.trackTitle} numberOfLines={1}>
                       {item.title}
                     </Text>
-                    {item.explicit ? (
-                      <View style={styles.explicitBadge}>
-                        <Text style={styles.explicitText}>E</Text>
-                      </View>
-                    ) : null}
                   </View>
 
                   <Text style={styles.artist} numberOfLines={1}>
@@ -52,12 +106,12 @@ export default function FavoriteDownloadsScreen() {
               </View>
 
               <View style={styles.actions}>
-                <Text style={styles.duration}>{item.duration}</Text>
+                <Text style={styles.duration}>{formatDuration(item.durationSec)}</Text>
                 <TouchableOpacity style={styles.moreButton} activeOpacity={0.7}>
                   <MaterialIcons name="more-horiz" size={20} color="rgba(255,255,255,0.62)" />
                 </TouchableOpacity>
               </View>
-            </View>
+            </TouchableOpacity>
           )}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
@@ -98,6 +152,16 @@ const styles = StyleSheet.create({
   listContent: {
     paddingTop: 8,
     paddingBottom: 220,
+  },
+  centered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
+  },
+  errorText: {
+    color: '#ff6b6b',
+    fontSize: 15,
+    textAlign: 'center',
   },
   row: {
     flexDirection: 'row',
@@ -144,21 +208,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
-  },
-  explicitBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  explicitText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.7)',
   },
   artist: {
     marginTop: 3,
