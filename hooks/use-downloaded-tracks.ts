@@ -2,6 +2,7 @@ import { startTransition, useEffect, useState } from 'react';
 
 import {
     downloadTrackToDevice,
+    removeDownloadedTrack as removeDownloadedTrackFromDevice,
     subscribeToDownloadedTracks,
     type DownloadedTrack,
     type DownloadedTrackSource,
@@ -43,6 +44,16 @@ export function useDownloadedTracks() {
     }
   }
 
+  async function removeDownloadedTrack(trackId: string) {
+    setPendingIds((current) => [...current, trackId]);
+
+    try {
+      await removeDownloadedTrackFromDevice(trackId);
+    } finally {
+      setPendingIds((current) => current.filter((id) => id !== trackId));
+    }
+  }
+
   function isDownloadPending(trackId: string) {
     return pendingIds.includes(trackId);
   }
@@ -54,6 +65,7 @@ export function useDownloadedTracks() {
     isError: !!error,
     error,
     downloadTrack,
+    removeDownloadedTrack,
     isDownloadPending,
   };
 }

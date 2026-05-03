@@ -3,6 +3,7 @@ import { startTransition, useEffect, useState } from 'react';
 import { useAuth } from '@/context/auth';
 import {
     removeFavoriteTrack,
+    reorderFavoriteTracks,
     saveFavoriteTrack,
     subscribeToFavoriteTracks,
     type FavoriteTrack,
@@ -62,6 +63,15 @@ export function useFavoriteTracks() {
     }
   }
 
+  async function moveTrack(fromIndex: number, toIndex: number) {
+    if (!user) return;
+    const reordered = [...tracks];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    setTracks(reordered);
+    await reorderFavoriteTracks(user.uid, reordered);
+  }
+
   function isFavoritePending(trackId: string) {
     return pendingIds.includes(trackId);
   }
@@ -74,5 +84,6 @@ export function useFavoriteTracks() {
     error,
     toggleFavoriteTrack,
     isFavoritePending,
+    moveTrack,
   };
 }

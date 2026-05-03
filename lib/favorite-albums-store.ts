@@ -6,6 +6,7 @@ import {
     orderBy,
     query,
     setDoc,
+    writeBatch,
     type Unsubscribe,
 } from 'firebase/firestore';
 
@@ -74,6 +75,17 @@ export async function saveFavoriteAlbum(userId: string, album: FavoriteAlbumInpu
 
 export async function removeFavoriteAlbum(userId: string, albumId: string) {
   await deleteDoc(doc(favoriteAlbumsCollection(userId), albumId));
+}
+
+export async function reorderFavoriteAlbums(userId: string, albums: FavoriteAlbum[]) {
+  const batch = writeBatch(db);
+  const now = Date.now();
+  albums.forEach((album, index) => {
+    batch.update(doc(favoriteAlbumsCollection(userId), album.id), {
+      bookmarkedAt: now - index,
+    });
+  });
+  await batch.commit();
 }
 
 export function subscribeToFavoriteAlbums(

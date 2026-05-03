@@ -112,6 +112,30 @@ export function subscribeToDownloadedTracks(
   };
 }
 
+export async function removeDownloadedTrack(trackId: string) {
+  const existingTracks = await readDownloadedTracks();
+  const track = existingTracks.find((t) => t.id === trackId);
+
+  // Remove from storage first so UI updates immediately
+  await persistDownloadedTracks(existingTracks.filter((t) => t.id !== trackId));
+
+  // Then clean up files in the background
+  if (track) {
+    try {
+      await FileSystem.deleteAsync(track.audioFileUri, { idempotent: true });
+    } catch {}
+    try {
+      if (track.artworkFileUri) {
+        await FileSystem.deleteAsync(track.artworkFileUri, { idempotent: true });
+      }
+    } catch {}
+  }
+}
+
+export async function reorderDownloadedTracks(tracks: DownloadedTrack[]) {
+  await persistDownloadedTracks(tracks);
+}
+
 export async function downloadTrackToDevice(track: DownloadedTrackSource) {
   const existingTracks = await readDownloadedTracks();
   const existingTrack = existingTracks.find((existing) => existing.id === track.id);

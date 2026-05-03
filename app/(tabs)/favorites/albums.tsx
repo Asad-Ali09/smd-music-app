@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FavoritesCategoryPlaceholder } from '@/components/favorites-category-placeholder';
@@ -9,7 +10,8 @@ import { ThemedText } from '@/components/themed-text';
 import { useFavoriteAlbums } from '@/hooks/use-favorite-albums';
 
 export default function FavoriteAlbumsScreen() {
-  const { data, isPending, isError } = useFavoriteAlbums();
+  const { data, isPending, isError, toggleFavoriteAlbum } = useFavoriteAlbums();
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   if (!isPending && !isError && data.length === 0) {
     return (
@@ -53,9 +55,10 @@ export default function FavoriteAlbumsScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={styles.row}
+              style={[styles.row, openMenuId === item.id && styles.rowMenuOpen]}
               activeOpacity={0.78}
-              onPress={() =>
+              onPress={() => {
+                setOpenMenuId(null);
                 router.push({
                   pathname: '/album/[id]',
                   params: {
@@ -71,10 +74,10 @@ export default function FavoriteAlbumsScreen() {
                     explicit: item.explicit ? '1' : '0',
                     source: item.source,
                   },
-                })
-              }
+                });
+              }}
             >
-              <View style={[styles.artwork, { backgroundColor: item.color }]}> 
+              <View style={[styles.artwork, { backgroundColor: item.color }]}>
                 {item.artworkUrl ? (
                   <Image source={{ uri: item.artworkUrl }} style={styles.artworkImage} contentFit="cover" />
                 ) : null}
@@ -90,20 +93,45 @@ export default function FavoriteAlbumsScreen() {
                 <ThemedText style={styles.year} numberOfLines={1}>{item.meta}</ThemedText>
               </View>
 
-              <View style={styles.actions}>
+              <View style={styles.trackRight}>
                 {item.explicit ? (
                   <View style={styles.explicitBadge}>
                     <ThemedText style={styles.explicitBadgeText}>E</ThemedText>
                   </View>
                 ) : null}
-                <TouchableOpacity style={styles.moreButton} activeOpacity={0.7}>
+                <TouchableOpacity
+                  style={styles.moreButton}
+                  activeOpacity={0.7}
+                  hitSlop={8}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuId((cur) => (cur === item.id ? null : item.id));
+                  }}
+                >
                   <MaterialIcons name="more-horiz" size={20} color="rgba(255,255,255,0.7)" />
                 </TouchableOpacity>
+
+                {openMenuId === item.id && (
+                  <Pressable style={styles.trackMenu} onPress={() => {}}>
+                    <TouchableOpacity
+                      style={styles.trackMenuItem}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        const album = item;
+                        setOpenMenuId(null);
+                        toggleFavoriteAlbum(album);
+                      }}
+                    >
+                      <ThemedText style={styles.trackMenuText}>Remove from favorites</ThemedText>
+                    </TouchableOpacity>
+                  </Pressable>
+                )}
               </View>
             </TouchableOpacity>
           )}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
+          onScrollBeginDrag={() => setOpenMenuId(null)}
         />
       </View>
     </SafeAreaView>
@@ -158,6 +186,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  rowMenuOpen: {
+    zIndex: 10,
+  },
   artwork: {
     width: 54,
     height: 54,
@@ -188,10 +219,11 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.62)',
     marginTop: 1,
   },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  trackRight: {
+    position: 'relative',
+    alignItems: 'flex-end',
     marginLeft: 12,
+    gap: 4,
   },
   explicitBadge: {
     width: 18,
@@ -201,7 +233,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.28)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
   },
   explicitBadgeText: {
     fontSize: 10,
@@ -209,9 +240,31 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
   },
   moreButton: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 2,
+  },
+  trackMenu: {
+    position: 'absolute',
+    top: 26,
+    right: -6,
+    minWidth: 154,
+    borderRadius: 14,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
+  },
+  trackMenuItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  trackMenuText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

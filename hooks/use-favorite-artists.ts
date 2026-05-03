@@ -3,6 +3,7 @@ import { startTransition, useEffect, useState } from 'react';
 import { useAuth } from '@/context/auth';
 import {
     removeFavoriteArtist,
+    reorderFavoriteArtists,
     saveFavoriteArtist,
     subscribeToFavoriteArtists,
     type FavoriteArtist,
@@ -62,6 +63,15 @@ export function useFavoriteArtists() {
     }
   }
 
+  async function moveArtist(fromIndex: number, toIndex: number) {
+    if (!user) return;
+    const reordered = [...artists];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    setArtists(reordered);
+    await reorderFavoriteArtists(user.uid, reordered);
+  }
+
   function isFavoritePending(artistId: string) {
     return pendingIds.includes(artistId);
   }
@@ -74,5 +84,6 @@ export function useFavoriteArtists() {
     error,
     toggleFavoriteArtist,
     isFavoritePending,
+    moveArtist,
   };
 }

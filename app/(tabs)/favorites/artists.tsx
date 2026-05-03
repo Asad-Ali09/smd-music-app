@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FavoritesCategoryPlaceholder } from '@/components/favorites-category-placeholder';
@@ -15,7 +16,8 @@ function formatArtistMeta(trackCount: number, albumCount: number) {
 }
 
 export default function FavoriteArtistsScreen() {
-  const { data, isPending, isError } = useFavoriteArtists();
+  const { data, isPending, isError, toggleFavoriteArtist } = useFavoriteArtists();
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   if (!isPending && !isError && data.length === 0) {
     return (
@@ -54,16 +56,21 @@ export default function FavoriteArtistsScreen() {
           </View>
         )}
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
-          {data.map((item) => {
+        <FlatList
+          data={data}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          onScrollBeginDrag={() => setOpenMenuId(null)}
+          renderItem={({ item }) => {
             const staticArtist = getFavoriteArtist(item.id);
 
             return (
               <TouchableOpacity
-                key={item.id}
-                style={styles.row}
+                style={[styles.row, openMenuId === item.id && styles.rowMenuOpen]}
                 activeOpacity={0.78}
-                onPress={() =>
+                onPress={() => {
+                  setOpenMenuId(null);
                   router.push({
                     pathname: '/artist/[id]',
                     params: {
@@ -81,10 +88,10 @@ export default function FavoriteArtistsScreen() {
                       location: item.location,
                       website: item.website,
                     },
-                  })
-                }
+                  });
+                }}
               >
-                <View style={[styles.avatar, { backgroundColor: item.color }]}> 
+                <View style={[styles.avatar, { backgroundColor: item.color }]}>
                   {item.avatarUrl ? (
                     <Image source={{ uri: item.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
                   ) : staticArtist ? (
@@ -101,13 +108,39 @@ export default function FavoriteArtistsScreen() {
                   </ThemedText>
                 </View>
 
-                <TouchableOpacity style={styles.moreButton} activeOpacity={0.7}>
-                  <MaterialIcons name="more-horiz" size={20} color="rgba(255,255,255,0.62)" />
-                </TouchableOpacity>
+                <View style={styles.trackRight}>
+                  <TouchableOpacity
+                    style={styles.moreButton}
+                    activeOpacity={0.7}
+                    hitSlop={8}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setOpenMenuId((cur) => (cur === item.id ? null : item.id));
+                    }}
+                  >
+                    <MaterialIcons name="more-horiz" size={20} color="rgba(255,255,255,0.62)" />
+                  </TouchableOpacity>
+
+                  {openMenuId === item.id && (
+                    <Pressable style={styles.trackMenu} onPress={() => {}}>
+                      <TouchableOpacity
+                        style={styles.trackMenuItem}
+                        activeOpacity={0.75}
+                        onPress={() => {
+                          const artist = item;
+                          setOpenMenuId(null);
+                          toggleFavoriteArtist(artist);
+                        }}
+                      >
+                        <ThemedText style={styles.trackMenuText}>Remove from favorites</ThemedText>
+                      </TouchableOpacity>
+                    </Pressable>
+                  )}
+                </View>
               </TouchableOpacity>
             );
-          })}
-        </ScrollView>
+          }}
+        />
       </View>
     </SafeAreaView>
   );
@@ -161,6 +194,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  rowMenuOpen: {
+    zIndex: 10,
+  },
   avatar: {
     width: 72,
     height: 72,
@@ -192,11 +228,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255,255,255,0.52)',
   },
-  moreButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
+  trackRight: {
+    position: 'relative',
+    alignItems: 'flex-end',
     marginLeft: 10,
+  },
+  moreButton: {
+    padding: 2,
+  },
+  trackMenu: {
+    position: 'absolute',
+    top: 26,
+    right: -6,
+    minWidth: 154,
+    borderRadius: 14,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
+  },
+  trackMenuItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  trackMenuText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

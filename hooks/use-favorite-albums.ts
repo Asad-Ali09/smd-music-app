@@ -3,6 +3,7 @@ import { startTransition, useEffect, useState } from 'react';
 import { useAuth } from '@/context/auth';
 import {
     removeFavoriteAlbum,
+    reorderFavoriteAlbums,
     saveFavoriteAlbum,
     subscribeToFavoriteAlbums,
     type FavoriteAlbum,
@@ -62,6 +63,15 @@ export function useFavoriteAlbums() {
     }
   }
 
+  async function moveAlbum(fromIndex: number, toIndex: number) {
+    if (!user) return;
+    const reordered = [...albums];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    setAlbums(reordered);
+    await reorderFavoriteAlbums(user.uid, reordered);
+  }
+
   function isBookmarkPending(albumId: string) {
     return pendingIds.includes(albumId);
   }
@@ -74,5 +84,6 @@ export function useFavoriteAlbums() {
     error,
     toggleFavoriteAlbum,
     isBookmarkPending,
+    moveAlbum,
   };
 }

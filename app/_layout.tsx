@@ -1,16 +1,20 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Image } from 'expo-image';
-import { router, Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
+} from "@react-navigation/native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Image } from "expo-image";
+import { router, Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useRef, useState } from "react";
+import { Animated, StyleSheet, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { AuthProvider, useAuth } from '@/context/auth';
-import { PlayerProvider } from '@/context/player';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AuthProvider, useAuth } from "@/context/auth";
+import { PlayerProvider } from "@/context/player";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -38,9 +42,15 @@ function SplashOverlay() {
 
   return (
     <View style={splashStyles.overlay}>
-      <Animated.View style={{ alignItems: 'center', transform: [{ scale: scaleAnim }], opacity: opacityAnim }}>
+      <Animated.View
+        style={{
+          alignItems: "center",
+          transform: [{ scale: scaleAnim }],
+          opacity: opacityAnim,
+        }}
+      >
         <Image
-          source={require('@/assets/images/splash-icon.png')}
+          source={require("@/assets/images/splash-icon.png")}
           style={splashStyles.logo}
           contentFit="contain"
         />
@@ -62,9 +72,9 @@ function RootNavigator() {
 
     const timer = setTimeout(() => {
       if (user) {
-        router.replace('/(tabs)');
+        router.replace("/(tabs)");
       } else {
-        router.replace('/(auth)/sign-in');
+        router.replace("/(auth)/sign-in");
       }
       setShowSplash(false);
     }, 800);
@@ -74,17 +84,23 @@ function RootNavigator() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <Stack>
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="album/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="artist/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="playlist/[id]" options={{ headerShown: false }} />
-          <Stack.Screen name="player" options={{ headerShown: false, presentation: 'modal' }} />
-          <Stack.Screen name="profile" options={{ headerShown: false, presentation: 'modal' }} />
+          <Stack.Screen
+            name="player"
+            options={{ headerShown: false, presentation: "modal" }}
+          />
+          <Stack.Screen
+            name="profile"
+            options={{ headerShown: false, presentation: "modal" }}
+          />
         </Stack>
-        <StatusBar style={showSplash ? 'light' : 'auto'} />
+        <StatusBar style={showSplash ? "light" : "auto"} />
       </ThemeProvider>
 
       {(loading || showSplash) && <SplashOverlay />}
@@ -95,9 +111,9 @@ function RootNavigator() {
 const splashStyles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0D3D38',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#0D3D38",
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 999,
   },
   logo: {
@@ -106,10 +122,10 @@ const splashStyles = StyleSheet.create({
     borderRadius: 36,
   },
   appName: {
-    marginTop: 10,
+    marginTop: 5,
     fontSize: 28,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
     letterSpacing: 0.2,
   },
 });

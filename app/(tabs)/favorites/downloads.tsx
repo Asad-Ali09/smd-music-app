@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FavoritesCategoryPlaceholder } from '@/components/favorites-category-placeholder';
@@ -14,7 +15,8 @@ function formatDuration(seconds: number) {
 }
 
 export default function FavoriteDownloadsScreen() {
-  const { data, isPending, isError } = useDownloadedTracks();
+  const { data, isPending, isError, removeDownloadedTrack } = useDownloadedTracks();
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   if (!isPending && !isError && data.length === 0) {
     return (
@@ -56,11 +58,13 @@ export default function FavoriteDownloadsScreen() {
         <FlatList
           data={data}
           keyExtractor={(item) => item.id}
+          onScrollBeginDrag={() => setOpenMenuId(null)}
           renderItem={({ item, index }) => (
             <TouchableOpacity
-              style={styles.row}
+              style={[styles.row, openMenuId === item.id && styles.rowMenuOpen]}
               activeOpacity={0.75}
-              onPress={() =>
+              onPress={() => {
+                setOpenMenuId(null);
                 router.push({
                   pathname: '/player',
                   params: {
@@ -74,8 +78,8 @@ export default function FavoriteDownloadsScreen() {
                     playlistName: item.playlistName,
                     color: item.color,
                   },
-                })
-              }
+                });
+              }}
             >
               <View style={styles.leftGroup}>
                 <View style={styles.indexWrap}>
@@ -105,11 +109,35 @@ export default function FavoriteDownloadsScreen() {
                 </View>
               </View>
 
-              <View style={styles.actions}>
+              <View style={styles.trackRight}>
                 <Text style={styles.duration}>{formatDuration(item.durationSec)}</Text>
-                <TouchableOpacity style={styles.moreButton} activeOpacity={0.7}>
+                <TouchableOpacity
+                  style={styles.moreButton}
+                  activeOpacity={0.7}
+                  hitSlop={8}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuId((cur) => (cur === item.id ? null : item.id));
+                  }}
+                >
                   <MaterialIcons name="more-horiz" size={20} color="rgba(255,255,255,0.62)" />
                 </TouchableOpacity>
+
+                {openMenuId === item.id && (
+                  <Pressable style={styles.trackMenu} onPress={() => {}}>
+                    <TouchableOpacity
+                      style={styles.trackMenuItem}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        const trackId = item.id;
+                        setOpenMenuId(null);
+                        removeDownloadedTrack(trackId);
+                      }}
+                    >
+                      <Text style={styles.trackMenuText}>Remove from downloads</Text>
+                    </TouchableOpacity>
+                  </Pressable>
+                )}
               </View>
             </TouchableOpacity>
           )}
@@ -169,6 +197,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 14,
   },
+  rowMenuOpen: {
+    zIndex: 10,
+  },
   leftGroup: {
     flex: 1,
     flexDirection: 'row',
@@ -214,20 +245,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255,255,255,0.52)',
   },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 10,
+  trackRight: {
+    position: 'relative',
+    alignItems: 'flex-end',
+    gap: 4,
   },
   duration: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.5)',
-    marginRight: 10,
   },
   moreButton: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 2,
+  },
+  trackMenu: {
+    position: 'absolute',
+    top: 26,
+    right: -6,
+    minWidth: 154,
+    borderRadius: 14,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
+  },
+  trackMenuItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  trackMenuText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
