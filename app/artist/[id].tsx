@@ -1,21 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
+import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { useAudiusUser, useAudiusUserPlaylists, useAudiusUserTracks } from '@/hooks/use-audius';
+import { useFavoriteArtists } from '@/hooks/use-favorite-artists';
 import { type AudiusPlaylist, type AudiusTrack, type AudiusUser } from '@/lib/audius';
 import { getFavoriteArtist, type FavoriteArtist, type FavoriteArtistRelease } from '@/lib/favorite-artists';
+import {
+  createFavoriteArtistInput,
+  getFavoriteArtistAppearance,
+} from '@/lib/favorite-artists-store';
 
 const PLAYLIST_COLORS: [string, string][] = [
   ['#1D7F6B', '#0B3E36'],
@@ -47,6 +55,19 @@ type ArtistRouteParams = {
   website?: string;
 };
 
+type ArtistActionSheetProps = {
+  accent: string;
+  artworkUrl?: string;
+  bottomInset: number;
+  description?: string | null;
+  favoritePending: boolean;
+  isFavorite: boolean;
+  name: string;
+  onToggleFavorite: () => void;
+  sheetRef: React.RefObject<BottomSheet | null>;
+  snapPoints: (number | string)[];
+};
+
 function formatCompactNumber(value: number | undefined): string {
   if (!value) return '0';
   if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
@@ -76,6 +97,71 @@ function getUserAvatar(user: AudiusUser | null): string {
 function getUserCover(user: AudiusUser | null): string {
   if (!user) return '';
   return user.cover_photo?.['640x'] ?? user.cover_photo?.['2000x'] ?? '';
+}
+
+function ArtistActionSheet({
+  accent,
+  artworkUrl,
+  bottomInset,
+  description,
+  favoritePending,
+  isFavorite,
+  name,
+  onToggleFavorite,
+  sheetRef,
+  snapPoints,
+}: ArtistActionSheetProps) {
+  const resolvedDescription = description?.trim() || 'No description available.';
+
+  return (
+    <BottomSheet
+      ref={sheetRef}
+      index={-1}
+      snapPoints={snapPoints}
+      enablePanDownToClose
+      backgroundStyle={styles.sheetBackground}
+      handleIndicatorStyle={styles.sheetHandleIndicator}
+    >
+      <BottomSheetView style={[styles.sheetContent, { paddingBottom: bottomInset + 20 }]}>
+        <View style={styles.sheetHeaderRow}>
+          <View style={[styles.sheetArtworkShell, { backgroundColor: accent }]}> 
+            {artworkUrl ? (
+              <Image source={{ uri: artworkUrl }} style={styles.sheetArtwork} contentFit="cover" />
+            ) : (
+              <Ionicons name="person" size={24} color="#FFFFFF" />
+            )}
+          </View>
+
+          <View style={styles.sheetTitleBlock}>
+            <ThemedText style={styles.sheetTitle} numberOfLines={1}>
+              {name}
+            </ThemedText>
+            <ThemedText style={styles.sheetSubtitle}>Artist options</ThemedText>
+          </View>
+        </View>
+
+        <ThemedText style={description ? styles.sheetDescription : styles.sheetDescriptionEmpty}>
+          {resolvedDescription}
+        </ThemedText>
+
+        <TouchableOpacity
+          style={[styles.sheetActionButton, favoritePending && styles.sheetActionButtonDisabled]}
+          activeOpacity={0.82}
+          disabled={favoritePending}
+          onPress={() => void onToggleFavorite()}
+        >
+          <Ionicons name={isFavorite ? 'bookmark' : 'bookmark-outline'} size={18} color="#FFFFFF" />
+          <ThemedText style={styles.sheetActionText}>
+            {favoritePending
+              ? 'Updating favorites…'
+              : isFavorite
+                ? 'Remove from favorites'
+                : 'Add to favorites'}
+          </ThemedText>
+        </TouchableOpacity>
+      </BottomSheetView>
+    </BottomSheet>
+  );
 }
 
 function openCollection(collection: AudiusPlaylist, colors: [string, string]) {
@@ -130,6 +216,44 @@ function ReleaseCard({ release }: { release: FavoriteArtistRelease }) {
 }
 
 function FavoriteArtistDetailScreen({ artist }: { artist: FavoriteArtist }) {
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const { data: favoriteArtists, favoriteIds, isFavoritePending, toggleFavoriteArtist } = useFavoriteArtists();
+  const sheetRef = useRef<BottomSheet>(null);
+  const snapPoints = useMemo(() => [310], []);
+  const storedFavoriteArtist = favoriteArtists.find((entry) => entry.id === artist.id);
+  const isFavorite = favoriteIds.has(artist.id);
+  const favoritePending = isFavoritePending(artist.id);
+
+  async function handleToggleFavoriteArtist() {
+    try {
+      await toggleFavoriteArtist(
+        storedFavoriteArtist ?? {
+          id: artist.id,
+          name: artist.name,
+          handle: '',
+          description: '',
+          avatarUrl: '',
+          coverUrl: '',
+          color: artist.color,
+          accent: artist.accent,
+          followerCount: 0,
+          trackCount: artist.trackCount,
+          albumCount: artist.albumCount,
+          playlistCount: 0,
+          verified: false,
+          location: '',
+          website: '',
+        }
+      );
+      sheetRef.current?.close();
+    } catch (error) {
+      Alert.alert(
+        'Favorite failed',
+        error instanceof Error ? error.message : 'Unable to update this artist in favorites right now.'
+      );
+    }
+  }
+
   return (
     <View style={styles.root}>
       <LinearGradient
@@ -145,7 +269,11 @@ function FavoriteArtistDetailScreen({ artist }: { artist: FavoriteArtist }) {
               <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.headerButton}
+              activeOpacity={0.7}
+              onPress={() => sheetRef.current?.expand()}
+            >
               <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
@@ -177,6 +305,19 @@ function FavoriteArtistDetailScreen({ artist }: { artist: FavoriteArtist }) {
           </ScrollView>
         </ScrollView>
       </SafeAreaView>
+
+      <ArtistActionSheet
+        accent={artist.accent}
+        artworkUrl=""
+        bottomInset={bottomInset}
+        description=""
+        favoritePending={favoritePending}
+        isFavorite={isFavorite}
+        name={artist.name}
+        onToggleFavorite={handleToggleFavoriteArtist}
+        sheetRef={sheetRef}
+        snapPoints={snapPoints}
+      />
     </View>
   );
 }
@@ -254,10 +395,14 @@ function ArtistCollectionCard({
 }
 
 function AudiusArtistDetailScreen({ params }: { params: ArtistRouteParams }) {
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const artistId = params.id;
   const { data: artist, isPending: artistPending, isError: artistError } = useAudiusUser(artistId);
   const { data: tracks = [], isPending: tracksPending } = useAudiusUserTracks(artistId, { limit: 6 });
   const { data: collections = [], isPending: collectionsPending } = useAudiusUserPlaylists(artistId, { limit: 8 });
+  const { data: favoriteArtists, favoriteIds, isFavoritePending, toggleFavoriteArtist } = useFavoriteArtists();
+  const sheetRef = useRef<BottomSheet>(null);
+  const snapPoints = useMemo(() => [340], []);
 
   const profile: AudiusUser | null = artist ?? (artistId
     ? {
@@ -292,11 +437,36 @@ function AudiusArtistDetailScreen({ params }: { params: ArtistRouteParams }) {
   const playlists = collections.filter((collection) => !collection.is_album).slice(0, 4);
   const avatarUrl = getUserAvatar(profile);
   const coverUrl = getUserCover(profile);
+  const existingFavoriteArtist = favoriteArtists.find((entry) => entry.id === artistId);
+  const isFavorite = !!artistId && favoriteIds.has(artistId);
+  const favoritePending = !!artistId && isFavoritePending(artistId);
+  const favoriteAppearance = existingFavoriteArtist ?? getFavoriteArtistAppearance(artistId ?? profile?.id ?? profile?.name ?? 'artist');
   const stats = [
     `${formatCompactNumber(profile?.follower_count)} followers`,
     `${profile?.track_count ?? 0} tracks`,
     `${profile?.album_count ?? 0} albums`,
   ].join(' • ');
+
+  async function handleToggleFavoriteArtist() {
+    if (!artistId || !profile) {
+      return;
+    }
+
+    try {
+      await toggleFavoriteArtist(
+        existingFavoriteArtist ?? createFavoriteArtistInput(profile, {
+          color: favoriteAppearance.color,
+          accent: favoriteAppearance.accent,
+        })
+      );
+      sheetRef.current?.close();
+    } catch (error) {
+      Alert.alert(
+        'Favorite failed',
+        error instanceof Error ? error.message : 'Unable to update this artist in favorites right now.'
+      );
+    }
+  }
 
   if (!artistId) {
     return (
@@ -326,7 +496,11 @@ function AudiusArtistDetailScreen({ params }: { params: ArtistRouteParams }) {
               <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.headerButton}
+              activeOpacity={0.7}
+              onPress={() => sheetRef.current?.expand()}
+            >
               <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
@@ -461,6 +635,19 @@ function AudiusArtistDetailScreen({ params }: { params: ArtistRouteParams }) {
           )}
         </ScrollView>
       </SafeAreaView>
+
+      <ArtistActionSheet
+        accent={favoriteAppearance.accent}
+        artworkUrl={avatarUrl}
+        bottomInset={bottomInset}
+        description={profile?.bio}
+        favoritePending={favoritePending}
+        isFavorite={isFavorite}
+        name={profile?.name ?? params.name ?? 'Artist'}
+        onToggleFavorite={handleToggleFavoriteArtist}
+        sheetRef={sheetRef}
+        snapPoints={snapPoints}
+      />
     </View>
   );
 }
@@ -627,6 +814,80 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
+  },
+  sheetBackground: {
+    backgroundColor: '#161616',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+  },
+  sheetHandleIndicator: {
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    width: 44,
+  },
+  sheetContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sheetArtworkShell: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  sheetArtwork: {
+    width: '100%',
+    height: '100%',
+  },
+  sheetTitleBlock: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  sheetSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.54)',
+  },
+  sheetDescription: {
+    marginTop: 18,
+    fontSize: 14,
+    lineHeight: 21,
+    color: 'rgba(255,255,255,0.76)',
+  },
+  sheetDescriptionEmpty: {
+    marginTop: 18,
+    fontSize: 14,
+    lineHeight: 21,
+    color: 'rgba(255,255,255,0.42)',
+  },
+  sheetActionButton: {
+    marginTop: 22,
+    minHeight: 52,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 18,
+  },
+  sheetActionButtonDisabled: {
+    opacity: 0.56,
+  },
+  sheetActionText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   sectionHint: {
     fontSize: 13,
