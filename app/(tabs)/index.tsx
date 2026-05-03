@@ -173,6 +173,11 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         <View style={styles.heroContent}>
+          <Image
+            source={require('@/assets/images/splash-icon.png')}
+            style={styles.heroLogo}
+            contentFit="contain"
+          />
           <ThemedText style={styles.heroTitle}>
             Live from Audius{`\n`}this week
           </ThemedText>
@@ -428,7 +433,7 @@ const styles = StyleSheet.create({
   },
   avatarWrapper: {
     alignItems: 'flex-end',
-    marginBottom: 80,
+    marginBottom: 24,
   },
   avatar: {
     width: 44,
@@ -439,8 +444,13 @@ const styles = StyleSheet.create({
   heroContent: {
     alignItems: 'center',
     gap: 16,
-    marginTop: 40,
-    paddingTop: 40,
+    marginTop: 8,
+    paddingTop: 0,
+  },
+  heroLogo: {
+    width: 90,
+    height: 90,
+    borderRadius: 22,
   },
   heroTitle: {
     fontSize: 28,

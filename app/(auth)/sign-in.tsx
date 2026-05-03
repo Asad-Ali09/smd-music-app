@@ -1,4 +1,5 @@
 import { useAuth } from '@/context/auth';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -54,6 +55,13 @@ export default function SignInScreen() {
           showsVerticalScrollIndicator={false}
         >
         <View style={styles.inner}>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('@/assets/images/splash-icon.png')}
+              style={styles.logo}
+              contentFit="contain"
+            />
+          </View>
           <Text style={styles.title}>Sign in</Text>
 
           <View style={styles.form}>
@@ -121,6 +129,15 @@ const styles = StyleSheet.create({
   },
   inner: {
     width: '100%',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  logo: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
   },
   title: {
     color: '#ffffff',
