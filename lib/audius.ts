@@ -18,6 +18,18 @@ export type AudiusUser = {
   id: string;
   name: string;
   handle: string;
+  bio?: string | null;
+  location?: string | null;
+  website?: string | null;
+  twitter_handle?: string | null;
+  instagram_handle?: string | null;
+  tiktok_handle?: string | null;
+  follower_count?: number;
+  followee_count?: number;
+  track_count?: number;
+  playlist_count?: number;
+  album_count?: number;
+  is_verified?: boolean;
   profile_picture?: AudiusArtwork;
   cover_photo?: {
     '640x': string;
@@ -90,6 +102,30 @@ export type TrendingTracksParams = {
   offset?: number;
 };
 
+export type SearchParams = {
+  query: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type UserTracksParams = {
+  limit?: number;
+  offset?: number;
+};
+
+export type UserPlaylistsParams = {
+  limit?: number;
+  offset?: number;
+};
+
+type AudiusListResponse<T> = {
+  data: T[];
+};
+
+type AudiusItemResponse<T> = {
+  data: T;
+};
+
 export async function fetchPlaylistTracks(playlistId: string): Promise<AudiusTrack[]> {
   const { data } = await axios.get<PlaylistTracksResponse>(
     `${BASE_URL}/playlists/${playlistId}/tracks`,
@@ -138,5 +174,93 @@ export async function fetchTrendingTracks(
       },
     }
   );
+  return data.data;
+}
+
+export async function searchTracks(params: SearchParams): Promise<AudiusTrack[]> {
+  const { data } = await axios.get<AudiusListResponse<AudiusTrack>>(`${BASE_URL}/tracks/search`, {
+    params: {
+      app_name: 'MusicApp',
+      limit: params.limit ?? 10,
+      query: params.query,
+      ...(params.offset !== undefined && { offset: params.offset }),
+    },
+  });
+
+  return data.data;
+}
+
+export async function searchPlaylists(params: SearchParams): Promise<AudiusPlaylist[]> {
+  const { data } = await axios.get<AudiusListResponse<AudiusPlaylist>>(
+    `${BASE_URL}/playlists/search`,
+    {
+      params: {
+        app_name: 'MusicApp',
+        limit: params.limit ?? 12,
+        query: params.query,
+        ...(params.offset !== undefined && { offset: params.offset }),
+      },
+    }
+  );
+
+  return data.data;
+}
+
+export async function searchUsers(params: SearchParams): Promise<AudiusUser[]> {
+  const { data } = await axios.get<AudiusListResponse<AudiusUser>>(`${BASE_URL}/users/search`, {
+    params: {
+      app_name: 'MusicApp',
+      limit: params.limit ?? 8,
+      query: params.query,
+      ...(params.offset !== undefined && { offset: params.offset }),
+    },
+  });
+
+  return data.data;
+}
+
+export async function fetchUser(userId: string): Promise<AudiusUser> {
+  const { data } = await axios.get<AudiusItemResponse<AudiusUser>>(`${BASE_URL}/users/${userId}`, {
+    params: {
+      app_name: 'MusicApp',
+    },
+  });
+
+  return data.data;
+}
+
+export async function fetchUserTracks(
+  userId: string,
+  params: UserTracksParams = {}
+): Promise<AudiusTrack[]> {
+  const { data } = await axios.get<AudiusListResponse<AudiusTrack>>(
+    `${BASE_URL}/users/${userId}/tracks`,
+    {
+      params: {
+        app_name: 'MusicApp',
+        limit: params.limit ?? 10,
+        ...(params.offset !== undefined && { offset: params.offset }),
+      },
+    }
+  );
+
+  return data.data;
+}
+
+export async function fetchUserPlaylists(
+  userId: string,
+  params: UserPlaylistsParams = {}
+): Promise<AudiusPlaylist[]> {
+  const { data } = await axios.get<AudiusListResponse<AudiusPlaylist>>(
+    `${BASE_URL}/users/${userId}/playlists`,
+    {
+      params: {
+        app_name: 'MusicApp',
+        limit: params.limit ?? 10,
+        ...(params.offset !== undefined && { offset: params.offset }),
+      },
+    }
+  );
+
   return data.data;
 }
