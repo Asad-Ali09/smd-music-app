@@ -9,6 +9,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     FlatList,
     StyleSheet,
     TouchableOpacity,
@@ -23,8 +24,10 @@ import Animated, {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { useFavoritePlaylists } from '@/hooks/use-favorite-playlists';
 import { usePlaylistTracks } from '@/hooks/use-playlists';
 import { type AudiusTrack } from '@/lib/audius';
+import { buildFavoritePlaylistMeta } from '@/lib/favorite-playlists';
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -112,12 +115,14 @@ function PlaylistSheetHandle({
 
 export default function PlaylistDetailScreen() {
   const { bottom: bottomInset } = useSafeAreaInsets();
-  const { id, name, color, artworkUrl, trackCount, description } = useLocalSearchParams<{
+  const { id, name, color, accent, artworkUrl, trackCount, totalPlayCount, description } = useLocalSearchParams<{
     id: string;
     name: string;
     color: string;
+    accent: string;
     artworkUrl: string;
     trackCount: string;
+    totalPlayCount: string;
     description: string;
   }>();
 
@@ -125,9 +130,22 @@ export default function PlaylistDetailScreen() {
   const gradientBottom = '#000000';
 
   const { data: tracks, isPending, isError } = usePlaylistTracks(id);
+  const { data: favoritePlaylists, favoriteIds, isBookmarkPending, toggleFavoritePlaylist } =
+    useFavoritePlaylists();
+
+  const existingFavoritePlaylist = favoritePlaylists.find((playlist) => playlist.id === id);
 
   const displayTrackCount = tracks?.length ?? Number(trackCount ?? 0);
   const totalSeconds = tracks?.reduce((sum, t) => sum + t.duration, 0) ?? 0;
+  const cachedTrackCount = existingFavoritePlaylist?.trackCount ?? Number(trackCount ?? 0);
+  const cachedTotalPlayCount =
+    existingFavoritePlaylist?.totalPlayCount ?? Number(totalPlayCount ?? 0);
+  const bookmarkMeta = buildFavoritePlaylistMeta({
+    track_count: cachedTrackCount,
+    total_play_count: cachedTotalPlayCount,
+  });
+  const isBookmarked = !!id && favoriteIds.has(id);
+  const bookmarkPending = !!id && isBookmarkPending(id);
   const metaLabel = displayTrackCount > 0
     ? `${displayTrackCount} tracks${totalSeconds > 0 ? ` • ${formatTotalDuration(totalSeconds)}` : ''}`
     : 'Loading…';
@@ -136,6 +154,30 @@ export default function PlaylistDetailScreen() {
     () => [SHEET_COLLAPSED_HEIGHT, SHEET_EXPANDED_HEIGHT],
     [],
   );
+
+  async function handleToggleBookmark() {
+    if (!id) {
+      return;
+    }
+
+    try {
+      await toggleFavoritePlaylist(
+        existingFavoritePlaylist ?? {
+          id,
+          playlistName: name ?? '',
+          description: description ?? '',
+          artworkUrl: artworkUrl ?? '',
+          color: gradientTop,
+          accent: accent ?? gradientTop,
+          meta: bookmarkMeta,
+          trackCount: cachedTrackCount,
+          totalPlayCount: cachedTotalPlayCount,
+        }
+      );
+    } catch {
+      Alert.alert('Bookmark failed', 'Unable to update this playlist bookmark right now.');
+    }
+  }
 
   return (
     <View style={styles.root}>
@@ -186,8 +228,16 @@ export default function PlaylistDetailScreen() {
             <Ionicons name="play" size={30} color="#000" style={{ marginLeft: 3 }} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn}>
-            <Ionicons name="bookmark-outline" size={22} color="rgba(255,255,255,0.8)" />
+          <TouchableOpacity
+            style={[styles.actionBtn, bookmarkPending && styles.iconButtonDisabled]}
+            disabled={bookmarkPending}
+            onPress={() => void handleToggleBookmark()}
+          >
+            <Ionicons
+              name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+              size={22}
+              color="rgba(255,255,255,0.8)"
+            />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -245,8 +295,12 @@ export default function PlaylistDetailScreen() {
         <BottomSheetView style={[styles.sheetScroll, styles.sheetContent]}>
           {/* Header row: bookmark | artwork | share */}
           <View style={styles.sheetHeaderRow}>
-            <TouchableOpacity style={styles.sheetIconBtn}>
-              <Ionicons name="bookmark-outline" size={22} color="#fff" />
+            <TouchableOpacity
+              style={[styles.sheetIconBtn, bookmarkPending && styles.iconButtonDisabled]}
+              disabled={bookmarkPending}
+              onPress={() => void handleToggleBookmark()}
+            >
+              <Ionicons name={isBookmarked ? 'bookmark' : 'bookmark-outline'} size={22} color="#fff" />
             </TouchableOpacity>
 
             <View style={styles.sheetArtworkWrapper}>
@@ -474,6 +528,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  iconButtonDisabled: {
+    opacity: 0.55,
   },
   sheetArtworkWrapper: {
     shadowColor: '#000',

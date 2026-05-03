@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
@@ -11,35 +11,54 @@ export type PlaylistCardProps = {
   colors: [string, ...string[]];
   /** Decorative blob color. When provided a blob and bookmark icon are shown. */
   accent?: string;
+  isBookmarked?: boolean;
+  bookmarkDisabled?: boolean;
+  onToggleBookmark?: () => void;
   onPress?: () => void;
 };
 
-export function PlaylistCard({ name, meta, colors, accent, onPress }: PlaylistCardProps) {
+export function PlaylistCard({
+  name,
+  meta,
+  colors,
+  accent,
+  isBookmarked = false,
+  bookmarkDisabled = false,
+  onToggleBookmark,
+  onPress,
+}: PlaylistCardProps) {
   const hasGradient = colors.length > 1;
+  const showBookmark = !!accent || !!onToggleBookmark || isBookmarked;
 
   const inner = (
     <>
-      {/* Decorative blob + bookmark — only when accent is provided */}
-      {accent && (
+      {accent && <View style={[styles.blob, { backgroundColor: accent }]} />}
+
+      {showBookmark && (
         <>
-          <View style={[styles.blob, { backgroundColor: accent }]} />
-          <View style={styles.bookmarkContainer}>
-            <Image
-              source={require('@/assets/icons/bookmark.svg')}
-              style={styles.bookmarkImage}
-              contentFit="contain"
+          <TouchableOpacity
+            style={[styles.bookmarkContainer, bookmarkDisabled && styles.bookmarkContainerDisabled]}
+            activeOpacity={0.7}
+            disabled={bookmarkDisabled}
+            onPress={(event) => {
+              event.stopPropagation();
+              onToggleBookmark?.();
+            }}
+          >
+            <MaterialIcons
+              name={isBookmarked ? 'bookmark' : 'bookmark-border'}
+              size={22}
+              color="#FFFFFF"
             />
-          </View>
+          </TouchableOpacity>
         </>
       )}
 
-      {/* Text */}
       <View style={styles.cardContent}>
         <ThemedText style={styles.name}>{name}</ThemedText>
         <ThemedText style={styles.meta}>{meta}</ThemedText>
       </View>
 
-      {/* Play button */}
       <TouchableOpacity style={styles.playButton} activeOpacity={0.8} onPress={onPress}>
         <View style={styles.playTriangle} />
       </TouchableOpacity>
@@ -105,9 +124,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bookmarkImage: {
-    width: 20,
-    height: 20,
+  bookmarkContainerDisabled: {
+    opacity: 0.55,
   },
   cardContent: {
     flex: 1,

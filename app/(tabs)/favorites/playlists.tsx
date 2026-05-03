@@ -1,44 +1,34 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FavoritesCategoryPlaceholder } from '@/components/favorites-category-placeholder';
 import { PlaylistCard } from '@/components/playlist-card';
 import { ThemedText } from '@/components/themed-text';
-import { useTrendingPlaylists } from '@/hooks/use-playlists';
-import { type AudiusPlaylist } from '@/lib/audius';
-
-const CARD_COLORS: [string, string][] = [
-  ['#4CAF50', '#1B5E20'],
-  ['#E53935', '#B71C1C'],
-  ['#1E88E5', '#0D47A1'],
-  ['#8E24AA', '#4A148C'],
-  ['#F4511E', '#BF360C'],
-  ['#00897B', '#004D40'],
-  ['#FFB300', '#E65100'],
-  ['#546E7A', '#263238'],
-];
-
-function getCardColors(index: number): { color: string; accent: string } {
-  const [color, accent] = CARD_COLORS[index % CARD_COLORS.length];
-  return { color, accent };
-}
-
-function buildMeta(playlist: AudiusPlaylist): string {
-  const parts: string[] = [];
-  if (playlist.track_count) parts.push(`${playlist.track_count} tracks`);
-  if (playlist.total_play_count) {
-    const plays =
-      playlist.total_play_count >= 1000
-        ? `${(playlist.total_play_count / 1000).toFixed(1)}k plays`
-        : `${playlist.total_play_count} plays`;
-    parts.push(plays);
-  }
-  return parts.join(' • ');
-}
+import { useFavoritePlaylists } from '@/hooks/use-favorite-playlists';
 
 export default function FavoritePlaylistsScreen() {
-  const { data, isPending, isError } = useTrendingPlaylists({ time: 'week', limit: 20 });
+  const { data, isPending, isError, toggleFavoritePlaylist, favoriteIds, isBookmarkPending } =
+    useFavoritePlaylists();
+
+  async function handleToggleFavorite(playlist: (typeof data)[number]) {
+    try {
+      await toggleFavoritePlaylist(playlist);
+    } catch {
+      Alert.alert('Bookmark failed', 'Unable to update this playlist bookmark right now.');
+    }
+  }
+
+  if (!isPending && !isError && data.length === 0) {
+    return (
+      <FavoritesCategoryPlaceholder
+        title="Playlists"
+        message="Bookmark playlists from the Top tab to keep them here for quick access."
+        icon="queue-music"
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -67,25 +57,29 @@ export default function FavoritePlaylistsScreen() {
           </View>
         )}
 
-        {data?.map((playlist, index) => {
-          const { color, accent } = getCardColors(index);
+        {data.map((playlist) => {
           return (
             <PlaylistCard
               key={playlist.id}
-              name={playlist.playlist_name}
-              meta={buildMeta(playlist)}
-              colors={[color]}
-              accent={accent}
+              name={playlist.playlistName}
+              meta={playlist.meta}
+              colors={[playlist.color]}
+              accent={playlist.accent}
+              isBookmarked={favoriteIds.has(playlist.id)}
+              bookmarkDisabled={isBookmarkPending(playlist.id)}
+              onToggleBookmark={() => void handleToggleFavorite(playlist)}
               onPress={() =>
                 router.push({
                   pathname: '/playlist/[id]',
                   params: {
                     id: playlist.id,
-                    name: playlist.playlist_name,
-                    color,
-                    artworkUrl: playlist.artwork?.['480x480'] ?? '',
-                    trackCount: playlist.track_count,
-                    description: playlist.description ?? '',
+                    name: playlist.playlistName,
+                    color: playlist.color,
+                    accent: playlist.accent,
+                    artworkUrl: playlist.artworkUrl,
+                    trackCount: playlist.trackCount,
+                    totalPlayCount: playlist.totalPlayCount,
+                    description: playlist.description,
                   },
                 })
               }

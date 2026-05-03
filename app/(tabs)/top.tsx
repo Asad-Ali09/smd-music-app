@@ -1,14 +1,16 @@
 import { router } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlaylistCard } from '@/components/playlist-card';
 import { ThemedText } from '@/components/themed-text';
+import { useFavoritePlaylists } from '@/hooks/use-favorite-playlists';
 import { useTrendingPlaylists } from '@/hooks/use-playlists';
 import { type AudiusPlaylist } from '@/lib/audius';
+import { buildFavoritePlaylistMeta, createFavoritePlaylistInput } from '@/lib/favorite-playlists';
 
 // Rotating palette for cards since the API doesn't provide color data
-const CARD_COLORS: Array<[string, string]> = [
+const CARD_COLORS: [string, string][] = [
   ['#4CAF50', '#1B5E20'],
   ['#E53935', '#B71C1C'],
   ['#1E88E5', '#0D47A1'],
@@ -24,21 +26,19 @@ function getCardColors(index: number): { color: string; accent: string } {
   return { color, accent };
 }
 
-function buildMeta(playlist: AudiusPlaylist): string {
-  const parts: string[] = [];
-  if (playlist.track_count) parts.push(`${playlist.track_count} tracks`);
-  if (playlist.total_play_count) {
-    const plays =
-      playlist.total_play_count >= 1000
-        ? `${(playlist.total_play_count / 1000).toFixed(1)}k plays`
-        : `${playlist.total_play_count} plays`;
-    parts.push(plays);
-  }
-  return parts.join(' • ');
-}
-
 export default function TopScreen() {
   const { data, isPending, isError } = useTrendingPlaylists({ time: 'week', limit: 20 });
+  const { favoriteIds, isBookmarkPending, toggleFavoritePlaylist } = useFavoritePlaylists();
+
+  async function handleToggleFavorite(index: number, playlist: AudiusPlaylist) {
+    const favoritePlaylist = createFavoritePlaylistInput(playlist, getCardColors(index));
+
+    try {
+      await toggleFavoritePlaylist(favoritePlaylist);
+    } catch {
+      Alert.alert('Bookmark failed', 'Unable to update this playlist bookmark right now.');
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -58,24 +58,29 @@ export default function TopScreen() {
         )}
 
         {data?.map((playlist, index) => {
-          const { color, accent } = getCardColors(index);
+          const favoritePlaylist = createFavoritePlaylistInput(playlist, getCardColors(index));
           return (
             <PlaylistCard
               key={playlist.id}
-              name={playlist.playlist_name}
-              meta={buildMeta(playlist)}
-              colors={[color]}
-              accent={accent}
+              name={favoritePlaylist.playlistName}
+              meta={buildFavoritePlaylistMeta(playlist)}
+              colors={[favoritePlaylist.color]}
+              accent={favoritePlaylist.accent}
+              isBookmarked={favoriteIds.has(playlist.id)}
+              bookmarkDisabled={isBookmarkPending(playlist.id)}
+              onToggleBookmark={() => void handleToggleFavorite(index, playlist)}
               onPress={() =>
                 router.push({
                   pathname: '/playlist/[id]',
                   params: {
                     id: playlist.id,
-                    name: playlist.playlist_name,
-                    color,
-                    artworkUrl: playlist.artwork?.['480x480'] ?? '',
-                    trackCount: playlist.track_count,
-                    description: playlist.description ?? '',
+                    name: favoritePlaylist.playlistName,
+                    color: favoritePlaylist.color,
+                    accent: favoritePlaylist.accent,
+                    artworkUrl: favoritePlaylist.artworkUrl,
+                    trackCount: favoritePlaylist.trackCount,
+                    totalPlayCount: favoritePlaylist.totalPlayCount,
+                    description: favoritePlaylist.description,
                   },
                 })
               }
