@@ -1,21 +1,30 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Image } from "expo-image";
+import { router } from "expo-router";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { FavoritesCategoryPlaceholder } from '@/components/favorites-category-placeholder';
-import { useDownloadedTracks } from '@/hooks/use-downloaded-tracks';
+import { FavoritesCategoryPlaceholder } from "@/components/favorites-category-placeholder";
+import { useDownloadedTracks } from "@/hooks/use-downloaded-tracks";
 
 function formatDuration(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   const remainderSeconds = seconds % 60;
-  return `${minutes}:${remainderSeconds.toString().padStart(2, '0')}`;
+  return `${minutes}:${remainderSeconds.toString().padStart(2, "0")}`;
 }
 
 export default function FavoriteDownloadsScreen() {
-  const { data, isPending, isError, removeDownloadedTrack } = useDownloadedTracks();
+  const { data, isPending, isError, removeDownloadedTrack } =
+    useDownloadedTracks();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   if (!isPending && !isError && data.length === 0) {
@@ -29,11 +38,25 @@ export default function FavoriteDownloadsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <View style={styles.container}>
+        {openMenuId && (
+          <Pressable
+            style={styles.menuOverlay}
+            onPress={() => setOpenMenuId(null)}
+          />
+        )}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.headerAction} activeOpacity={0.7} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back-ios-new" size={20} color="#FFFFFF" />
+          <TouchableOpacity
+            style={styles.headerAction}
+            activeOpacity={0.7}
+            onPress={() => router.back()}
+          >
+            <MaterialIcons
+              name="arrow-back-ios-new"
+              size={20}
+              color="#FFFFFF"
+            />
           </TouchableOpacity>
 
           <Text style={styles.headerTitle}>Downloads</Text>
@@ -51,7 +74,9 @@ export default function FavoriteDownloadsScreen() {
 
         {isError && (
           <View style={styles.centered}>
-            <Text style={styles.errorText}>Failed to load downloaded tracks. Please try again.</Text>
+            <Text style={styles.errorText}>
+              Failed to load downloaded tracks. Please try again.
+            </Text>
           </View>
         )}
 
@@ -66,7 +91,7 @@ export default function FavoriteDownloadsScreen() {
               onPress={() => {
                 setOpenMenuId(null);
                 router.push({
-                  pathname: '/player',
+                  pathname: "/player",
                   params: {
                     playlistId: item.playlistId,
                     trackId: item.id,
@@ -93,7 +118,9 @@ export default function FavoriteDownloadsScreen() {
                     contentFit="cover"
                   />
                 ) : (
-                  <View style={[styles.artwork, { backgroundColor: item.color }]} />
+                  <View
+                    style={[styles.artwork, { backgroundColor: item.color }]}
+                  />
                 )}
 
                 <View style={styles.rowContent}>
@@ -110,7 +137,9 @@ export default function FavoriteDownloadsScreen() {
               </View>
 
               <View style={styles.trackRight}>
-                <Text style={styles.duration}>{formatDuration(item.durationSec)}</Text>
+                <Text style={styles.duration}>
+                  {formatDuration(item.durationSec)}
+                </Text>
                 <TouchableOpacity
                   style={styles.moreButton}
                   activeOpacity={0.7}
@@ -120,7 +149,11 @@ export default function FavoriteDownloadsScreen() {
                     setOpenMenuId((cur) => (cur === item.id ? null : item.id));
                   }}
                 >
-                  <MaterialIcons name="more-horiz" size={20} color="rgba(255,255,255,0.62)" />
+                  <MaterialIcons
+                    name="more-horiz"
+                    size={20}
+                    color="rgba(255,255,255,0.62)"
+                  />
                 </TouchableOpacity>
 
                 {openMenuId === item.id && (
@@ -134,7 +167,9 @@ export default function FavoriteDownloadsScreen() {
                         removeDownloadedTrack(trackId);
                       }}
                     >
-                      <Text style={styles.trackMenuText}>Remove from downloads</Text>
+                      <Text style={styles.trackMenuText}>
+                        Remove from downloads
+                      </Text>
                     </TouchableOpacity>
                   </Pressable>
                 )}
@@ -152,73 +187,77 @@ export default function FavoriteDownloadsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
   },
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
     paddingHorizontal: 18,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingTop: 10,
     paddingBottom: 18,
   },
   headerAction: {
     width: 40,
     height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: '500',
-    color: '#FFFFFF',
+    fontWeight: "500",
+    color: "#FFFFFF",
   },
   listContent: {
     paddingTop: 8,
     paddingBottom: 220,
   },
   centered: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingTop: 60,
   },
   errorText: {
-    color: '#ff6b6b',
+    color: "#ff6b6b",
     fontSize: 15,
-    textAlign: 'center',
+    textAlign: "center",
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 14,
   },
   rowMenuOpen: {
     zIndex: 10,
   },
+  menuOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+  },
   leftGroup: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginRight: 12,
   },
   indexWrap: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.22)",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   indexText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   artwork: {
     width: 50,
@@ -228,58 +267,58 @@ const styles = StyleSheet.create({
   },
   rowContent: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   trackTitle: {
     flexShrink: 1,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   artist: {
     marginTop: 3,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.52)',
+    color: "rgba(255,255,255,0.52)",
   },
   trackRight: {
-    position: 'relative',
-    alignItems: 'flex-end',
+    position: "relative",
+    alignItems: "flex-end",
     gap: 4,
   },
   duration: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
+    color: "rgba(255,255,255,0.5)",
   },
   moreButton: {
     padding: 2,
   },
   trackMenu: {
-    position: 'absolute',
+    position: "absolute",
     top: 26,
     right: -6,
     minWidth: 154,
     borderRadius: 14,
-    backgroundColor: '#161616',
+    backgroundColor: "#161616",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: '#000',
+    borderColor: "rgba(255,255,255,0.08)",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.28,
     shadowRadius: 16,
     elevation: 12,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   trackMenuItem: {
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   trackMenuText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 });

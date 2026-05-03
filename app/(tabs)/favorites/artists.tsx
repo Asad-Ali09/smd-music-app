@@ -1,22 +1,30 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Image } from "expo-image";
+import { router } from "expo-router";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { FavoritesCategoryPlaceholder } from '@/components/favorites-category-placeholder';
-import { ThemedText } from '@/components/themed-text';
-import { useFavoriteArtists } from '@/hooks/use-favorite-artists';
-import { getFavoriteArtist } from '@/lib/favorite-artists';
+import { FavoritesCategoryPlaceholder } from "@/components/favorites-category-placeholder";
+import { ThemedText } from "@/components/themed-text";
+import { useFavoriteArtists } from "@/hooks/use-favorite-artists";
+import { getFavoriteArtist } from "@/lib/favorite-artists";
 
 function formatArtistMeta(trackCount: number, albumCount: number) {
-  const albumLabel = albumCount === 1 ? 'album' : 'albums';
+  const albumLabel = albumCount === 1 ? "album" : "albums";
   return `${trackCount} tracks · ${albumCount} ${albumLabel}`;
 }
 
 export default function FavoriteArtistsScreen() {
-  const { data, isPending, isError, toggleFavoriteArtist } = useFavoriteArtists();
+  const { data, isPending, isError, toggleFavoriteArtist } =
+    useFavoriteArtists();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   if (!isPending && !isError && data.length === 0) {
@@ -30,11 +38,25 @@ export default function FavoriteArtistsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <View style={styles.container}>
+        {openMenuId && (
+          <Pressable
+            style={styles.menuOverlay}
+            onPress={() => setOpenMenuId(null)}
+          />
+        )}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.headerAction} activeOpacity={0.7} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back-ios-new" size={20} color="#FFFFFF" />
+          <TouchableOpacity
+            style={styles.headerAction}
+            activeOpacity={0.7}
+            onPress={() => router.back()}
+          >
+            <MaterialIcons
+              name="arrow-back-ios-new"
+              size={20}
+              color="#FFFFFF"
+            />
           </TouchableOpacity>
 
           <ThemedText style={styles.headerTitle}>Artists</ThemedText>
@@ -52,7 +74,9 @@ export default function FavoriteArtistsScreen() {
 
         {isError && (
           <View style={styles.centered}>
-            <ThemedText style={styles.errorText}>Failed to load artists. Please try again.</ThemedText>
+            <ThemedText style={styles.errorText}>
+              Failed to load artists. Please try again.
+            </ThemedText>
           </View>
         )}
 
@@ -67,12 +91,15 @@ export default function FavoriteArtistsScreen() {
 
             return (
               <TouchableOpacity
-                style={[styles.row, openMenuId === item.id && styles.rowMenuOpen]}
+                style={[
+                  styles.row,
+                  openMenuId === item.id && styles.rowMenuOpen,
+                ]}
                 activeOpacity={0.78}
                 onPress={() => {
                   setOpenMenuId(null);
                   router.push({
-                    pathname: '/artist/[id]',
+                    pathname: "/artist/[id]",
                     params: {
                       id: item.id,
                       name: item.name,
@@ -84,7 +111,7 @@ export default function FavoriteArtistsScreen() {
                       trackCount: String(item.trackCount),
                       albumCount: String(item.albumCount),
                       playlistCount: String(item.playlistCount),
-                      verified: item.verified ? '1' : '0',
+                      verified: item.verified ? "1" : "0",
                       location: item.location,
                       website: item.website,
                     },
@@ -93,7 +120,11 @@ export default function FavoriteArtistsScreen() {
               >
                 <View style={[styles.avatar, { backgroundColor: item.color }]}>
                   {item.avatarUrl ? (
-                    <Image source={{ uri: item.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+                    <Image
+                      source={{ uri: item.avatarUrl }}
+                      style={styles.avatarImage}
+                      contentFit="cover"
+                    />
                   ) : staticArtist ? (
                     <View style={styles.avatarFallbackInner} />
                   ) : null}
@@ -115,10 +146,16 @@ export default function FavoriteArtistsScreen() {
                     hitSlop={8}
                     onPress={(e) => {
                       e.stopPropagation();
-                      setOpenMenuId((cur) => (cur === item.id ? null : item.id));
+                      setOpenMenuId((cur) =>
+                        cur === item.id ? null : item.id,
+                      );
                     }}
                   >
-                    <MaterialIcons name="more-horiz" size={20} color="rgba(255,255,255,0.62)" />
+                    <MaterialIcons
+                      name="more-horiz"
+                      size={20}
+                      color="rgba(255,255,255,0.62)"
+                    />
                   </TouchableOpacity>
 
                   {openMenuId === item.id && (
@@ -132,7 +169,9 @@ export default function FavoriteArtistsScreen() {
                           toggleFavoriteArtist(artist);
                         }}
                       >
-                        <ThemedText style={styles.trackMenuText}>Remove from favorites</ThemedText>
+                        <ThemedText style={styles.trackMenuText}>
+                          Remove from favorites
+                        </ThemedText>
                       </TouchableOpacity>
                     </Pressable>
                   )}
@@ -149,116 +188,120 @@ export default function FavoriteArtistsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
   },
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
     paddingHorizontal: 18,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingTop: 10,
     paddingBottom: 18,
   },
   headerAction: {
     width: 40,
     height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: '500',
-    color: '#FFFFFF',
+    fontWeight: "500",
+    color: "#FFFFFF",
   },
   centered: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingTop: 60,
   },
   errorText: {
-    color: '#ff6b6b',
+    color: "#ff6b6b",
     fontSize: 15,
-    textAlign: 'center',
+    textAlign: "center",
   },
   listContent: {
     paddingTop: 10,
     paddingBottom: 220,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 16,
   },
   rowMenuOpen: {
     zIndex: 10,
+  },
+  menuOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
   },
   avatar: {
     width: 72,
     height: 72,
     borderRadius: 36,
     marginRight: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   avatarImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   avatarFallbackInner: {
     flex: 1,
     margin: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: "rgba(255,255,255,0.14)",
   },
   rowContent: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   artistName: {
     fontSize: 17,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   artistMeta: {
     marginTop: 4,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.52)',
+    color: "rgba(255,255,255,0.52)",
   },
   trackRight: {
-    position: 'relative',
-    alignItems: 'flex-end',
+    position: "relative",
+    alignItems: "flex-end",
     marginLeft: 10,
   },
   moreButton: {
     padding: 2,
   },
   trackMenu: {
-    position: 'absolute',
+    position: "absolute",
     top: 26,
     right: -6,
     minWidth: 154,
     borderRadius: 14,
-    backgroundColor: '#161616',
+    backgroundColor: "#161616",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: '#000',
+    borderColor: "rgba(255,255,255,0.08)",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.28,
     shadowRadius: 16,
     elevation: 12,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   trackMenuItem: {
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   trackMenuText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 });

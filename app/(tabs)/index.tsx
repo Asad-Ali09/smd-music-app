@@ -216,7 +216,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <ThemedText style={styles.sectionTitle}>New releases</ThemedText>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/releases")}>
             <ThemedText style={styles.viewAll}>View All</ThemedText>
           </TouchableOpacity>
         </View>
@@ -283,7 +283,7 @@ export default function HomeScreen() {
           <ThemedText style={styles.sectionTitle}>
             Featured playlists
           </ThemedText>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/playlists")}>
             <ThemedText style={styles.viewAll}>View All</ThemedText>
           </TouchableOpacity>
         </View>
@@ -344,7 +344,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <ThemedText style={styles.sectionTitle}>Trending albums</ThemedText>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/albums")}>
             <ThemedText style={styles.viewAll}>View All</ThemedText>
           </TouchableOpacity>
         </View>
@@ -406,7 +406,7 @@ export default function HomeScreen() {
       <View style={[styles.section, styles.sectionLast]}>
         <View style={styles.sectionHeader}>
           <ThemedText style={styles.sectionTitle}>Top charts</ThemedText>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/charts")}>
             <ThemedText style={styles.viewAll}>View All</ThemedText>
           </TouchableOpacity>
         </View>

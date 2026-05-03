@@ -91,6 +91,10 @@ function RootNavigator() {
           <Stack.Screen name="album/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="artist/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="playlist/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="albums" options={{ headerShown: false }} />
+          <Stack.Screen name="charts" options={{ headerShown: false }} />
+          <Stack.Screen name="playlists" options={{ headerShown: false }} />
+          <Stack.Screen name="releases" options={{ headerShown: false }} />
           <Stack.Screen
             name="player"
             options={{ headerShown: false, presentation: "modal" }}
