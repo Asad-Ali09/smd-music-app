@@ -18,9 +18,10 @@ function RootNavigator() {
 
   useEffect(() => {
     if (loading) return;
-    if (user || true) { // remove this later
+    if (user) {
       router.replace('/(tabs)');
     } else {
+      router.replace('/(auth)/sign-in');
     }
   }, [user, loading]);
 
@@ -31,6 +32,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="playlist/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="player" options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="profile" options={{ headerShown: false, presentation: 'modal' }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

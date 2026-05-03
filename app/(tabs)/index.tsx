@@ -1,13 +1,15 @@
+import { useAuth } from '@/context/auth';
+import { useProfileAvatar } from '@/hooks/use-profile-avatar';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import {
-  ActivityIndicator,
-  FlatList,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -65,6 +67,8 @@ function buildPlaylistMeta(playlist: AudiusPlaylist): string {
 }
 
 export default function HomeScreen() {
+  const { user } = useAuth();
+  const { avatarUri } = useProfileAvatar(user?.uid, user?.photoURL ?? null);
   const {
     data: trendingTracks,
     isPending: tracksPending,
@@ -81,7 +85,6 @@ export default function HomeScreen() {
     .sort((a, b) => getReleaseTimestamp(b) - getReleaseTimestamp(a))
     .slice(0, 5);
   const topCharts = (trendingTracks ?? []).slice(0, 5);
-  const heroArtist = trendingTracks?.[0]?.user;
   const heroTrack = topCharts[0];
 
   const openPlaylist = (playlist: AudiusPlaylist, accent: string) => {
@@ -122,17 +125,21 @@ export default function HomeScreen() {
         style={styles.hero}
       >
         {/* Avatar */}
-        <View style={styles.avatarWrapper}>
-          {heroArtist?.profile_picture?.['150x150'] ? (
+        <TouchableOpacity
+          style={styles.avatarWrapper}
+          activeOpacity={0.85}
+          onPress={() => router.push('/profile')}
+        >
+          {avatarUri ? (
             <Image
-              source={{ uri: heroArtist.profile_picture['150x150'] }}
+              source={{ uri: avatarUri }}
               style={styles.avatar}
               contentFit="cover"
             />
           ) : (
             <View style={styles.avatar} />
           )}
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.heroContent}>
           <ThemedText style={styles.heroTitle}>
