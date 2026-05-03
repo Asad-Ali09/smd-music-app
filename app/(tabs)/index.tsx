@@ -1,5 +1,8 @@
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import {
+  ActivityIndicator,
   FlatList,
   ScrollView,
   StyleSheet,
@@ -8,30 +11,109 @@ import {
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { useTrendingPlaylists, useTrendingTracks } from '@/hooks/use-playlists';
+import { type AudiusPlaylist, type AudiusTrack } from '@/lib/audius';
 
-const NEW_RELEASES = [
-  { id: '1', title: 'Urgent Siege', tag: 'E', color: '#F5A623' },
-  { id: '2', title: 'Urgent Siege', tag: null, color: '#4CAF8A' },
-  { id: '3', title: 'Night Drive', tag: 'E', color: '#6B4FBB' },
-  { id: '4', title: 'Solar Winds', tag: null, color: '#E84C3C' },
-  { id: '5', title: 'Echo Chamber', tag: 'E', color: '#3A8FC1' },
+const RELEASE_CARD_COLORS = ['#F5A623', '#4CAF8A', '#6B4FBB', '#E84C3C', '#3A8FC1'];
+const PLAYLIST_GRADIENTS: [string, string][] = [
+  ['#1DB954', '#157A38'],
+  ['#6B4FBB', '#3E2A7A'],
+  ['#E84C3C', '#9B2020'],
+  ['#1A7BAA', '#0B3F59'],
 ];
 
-const FEATURED_PLAYLISTS = [
-  { id: '1', title: 'Chill Vibes', tracks: '24 tracks', colors: ['#1DB954', '#157A38'] },
-  { id: '2', title: 'Late Night', tracks: '18 tracks', colors: ['#6B4FBB', '#3E2A7A'] },
-  { id: '3', title: 'Workout Mix', tracks: '32 tracks', colors: ['#E84C3C', '#9B2020'] },
-];
+function formatCompactNumber(value: number): string {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+  return String(value);
+}
 
-const TOP_CHARTS = [
-  { id: '1', rank: 1, title: 'Midnight Rain', artist: 'Luna Ray' },
-  { id: '2', rank: 2, title: 'Golden Hour', artist: 'The Sunsets' },
-  { id: '3', rank: 3, title: 'Electric Feel', artist: 'Nova Pulse' },
-  { id: '4', rank: 4, title: 'Starfall', artist: 'Cosmo & The Wave' },
-  { id: '5', rank: 5, title: 'Blue Horizon', artist: 'Drift' },
-];
+function getTrackArtwork(track: AudiusTrack): string {
+  return track.artwork?.['480x480'] ?? track.artwork?.['150x150'] ?? '';
+}
+
+function getPlaylistArtwork(playlist: AudiusPlaylist): string {
+  return playlist.artwork?.['480x480'] ?? playlist.cover_art ?? '';
+}
+
+function getReleaseBadge(track: AudiusTrack): string | null {
+  if (track.parental_warning_type) return 'E';
+  if (!track.genre) return null;
+  return track.genre.split(/[\s/-]+/)[0]?.slice(0, 10) ?? null;
+}
+
+function getReleaseTimestamp(track: AudiusTrack): number {
+  const rawValue = track.release_date ?? track.created_at;
+  if (!rawValue) return 0;
+
+  const timestamp = Date.parse(rawValue);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function buildPlaylistMeta(playlist: AudiusPlaylist): string {
+  const parts: string[] = [];
+
+  if (playlist.track_count) {
+    parts.push(`${playlist.track_count} tracks`);
+  }
+
+  if (playlist.total_play_count) {
+    parts.push(`${formatCompactNumber(playlist.total_play_count)} plays`);
+  }
+
+  return parts.join(' • ');
+}
 
 export default function HomeScreen() {
+  const {
+    data: trendingTracks,
+    isPending: tracksPending,
+    isError: tracksError,
+  } = useTrendingTracks({ time: 'week', limit: 10 });
+  const {
+    data: trendingPlaylists,
+    isPending: playlistsPending,
+    isError: playlistsError,
+  } = useTrendingPlaylists({ time: 'week', limit: 4 });
+  const featuredPlaylists: AudiusPlaylist[] = trendingPlaylists ?? [];
+
+  const newReleases = [...(trendingTracks ?? [])]
+    .sort((a, b) => getReleaseTimestamp(b) - getReleaseTimestamp(a))
+    .slice(0, 5);
+  const topCharts = (trendingTracks ?? []).slice(0, 5);
+  const heroArtist = trendingTracks?.[0]?.user;
+  const heroTrack = topCharts[0];
+
+  const openPlaylist = (playlist: AudiusPlaylist, accent: string) => {
+    router.push({
+      pathname: '/playlist/[id]',
+      params: {
+        id: playlist.id,
+        name: playlist.playlist_name,
+        color: accent,
+        artworkUrl: getPlaylistArtwork(playlist),
+        trackCount: playlist.track_count,
+        description: playlist.description ?? '',
+      },
+    });
+  };
+
+  const openTrack = (track: AudiusTrack, color: string) => {
+    router.push({
+      pathname: '/player',
+      params: {
+        playlistId: '',
+        trackId: track.id,
+        trackTitle: track.title,
+        trackArtist: track.user?.name ?? 'Unknown Artist',
+        trackDuration: String(track.duration),
+        artworkUrl: getTrackArtwork(track),
+        playlistName: 'Trending on Audius',
+        color,
+      },
+    });
+  };
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Hero header */}
@@ -41,20 +123,32 @@ export default function HomeScreen() {
       >
         {/* Avatar */}
         <View style={styles.avatarWrapper}>
-          <View style={styles.avatar} />
+          {heroArtist?.profile_picture?.['150x150'] ? (
+            <Image
+              source={{ uri: heroArtist.profile_picture['150x150'] }}
+              style={styles.avatar}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={styles.avatar} />
+          )}
         </View>
 
         <View style={styles.heroContent}>
           <ThemedText style={styles.heroTitle}>
-            Listen to music{'\n'}without restrictions
+            Live from Audius{`\n`}this week
           </ThemedText>
 
           <TouchableOpacity style={styles.trialButton} activeOpacity={0.85}>
-            <ThemedText style={styles.trialButtonText}>Trial version</ThemedText>
+            <ThemedText style={styles.trialButtonText}>
+              {tracksPending ? 'Syncing charts' : `${topCharts.length || 0} trending tracks`}
+            </ThemedText>
           </TouchableOpacity>
 
           <ThemedText style={styles.trialMeta}>
-            Free for 3 months, then $12 a month
+            {heroTrack
+              ? `${heroTrack.user?.name ?? 'Audius'} is leading the feed with ${formatCompactNumber(heroTrack.play_count)} plays`
+              : 'Fresh tracks and playlists pulled directly from Audius'}
           </ThemedText>
         </View>
       </LinearGradient>
@@ -69,27 +163,56 @@ export default function HomeScreen() {
         </View>
 
         <FlatList
-          data={NEW_RELEASES}
+          data={newReleases}
           keyExtractor={(item) => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.horizontalList}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.releaseCard, { backgroundColor: item.color }]}
-              activeOpacity={0.85}
-            >
-              <View style={styles.releaseCardBottom}>
-                <ThemedText style={styles.releaseTitle}>{item.title}</ThemedText>
-                {item.tag && (
-                  <View style={styles.tagBadge}>
-                    <ThemedText style={styles.tagText}>{item.tag}</ThemedText>
-                  </View>
+          renderItem={({ item, index }) => {
+            const badge = getReleaseBadge(item);
+            const accent = RELEASE_CARD_COLORS[index % RELEASE_CARD_COLORS.length];
+
+            return (
+              <TouchableOpacity
+                style={[styles.releaseCard, { backgroundColor: accent }]}
+                activeOpacity={0.85}
+                onPress={() => openTrack(item, accent)}
+              >
+                {!!getTrackArtwork(item) && (
+                  <Image
+                    source={{ uri: getTrackArtwork(item) }}
+                    style={styles.releaseImage}
+                    contentFit="cover"
+                  />
                 )}
-              </View>
-            </TouchableOpacity>
-          )}
+                <View style={styles.releaseOverlay} />
+                <ThemedText style={styles.releaseArtist} numberOfLines={1}>
+                  {item.user?.name ?? 'Unknown Artist'}
+                </ThemedText>
+                <View style={styles.releaseCardBottom}>
+                  <ThemedText style={styles.releaseTitle} numberOfLines={2}>
+                    {item.title}
+                  </ThemedText>
+                  {badge && (
+                    <View style={styles.tagBadge}>
+                      <ThemedText style={styles.tagText}>{badge}</ThemedText>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          }}
         />
+
+        {tracksPending && !newReleases.length && (
+          <View style={styles.feedbackRow}>
+            <ActivityIndicator color="#FFFFFF" />
+          </View>
+        )}
+
+        {tracksError && !newReleases.length && (
+          <ThemedText style={styles.feedbackText}>Failed to load Audius releases.</ThemedText>
+        )}
       </View>
 
       {/* Featured playlists */}
@@ -101,21 +224,49 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {FEATURED_PLAYLISTS.map((item) => (
-          <TouchableOpacity key={item.id} style={styles.playlistRow} activeOpacity={0.85}>
-            <LinearGradient
-              colors={item.colors as [string, string]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.playlistThumb}
-            />
-            <View style={styles.playlistInfo}>
-              <ThemedText style={styles.playlistTitle}>{item.title}</ThemedText>
-              <ThemedText style={styles.playlistMeta}>{item.tracks}</ThemedText>
-            </View>
-            <ThemedText style={styles.playlistArrow}>›</ThemedText>
-          </TouchableOpacity>
-        ))}
+        {featuredPlaylists.map((item, index) => {
+          const colors = PLAYLIST_GRADIENTS[index % PLAYLIST_GRADIENTS.length];
+          const artworkUrl = getPlaylistArtwork(item);
+
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.playlistRow}
+              activeOpacity={0.85}
+              onPress={() => openPlaylist(item, colors[0])}
+            >
+              {artworkUrl ? (
+                <Image source={{ uri: artworkUrl }} style={styles.playlistThumb} contentFit="cover" />
+              ) : (
+                <LinearGradient
+                  colors={colors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.playlistThumb}
+                />
+              )}
+              <View style={styles.playlistInfo}>
+                <ThemedText style={styles.playlistTitle} numberOfLines={1}>
+                  {item.playlist_name}
+                </ThemedText>
+                <ThemedText style={styles.playlistMeta} numberOfLines={1}>
+                  {buildPlaylistMeta(item) || (item.user?.name ?? 'Audius Playlist')}
+                </ThemedText>
+              </View>
+              <ThemedText style={styles.playlistArrow}>›</ThemedText>
+            </TouchableOpacity>
+          );
+        })}
+
+        {playlistsPending && featuredPlaylists.length === 0 && (
+          <View style={styles.feedbackRow}>
+            <ActivityIndicator color="#FFFFFF" />
+          </View>
+        )}
+
+        {playlistsError && featuredPlaylists.length === 0 && (
+          <ThemedText style={styles.feedbackText}>Failed to load Audius playlists.</ThemedText>
+        )}
       </View>
 
       {/* Top charts */}
@@ -127,24 +278,50 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {TOP_CHARTS.map((item) => (
-          <TouchableOpacity key={item.id} style={styles.chartRow} activeOpacity={0.85}>
-            <ThemedText style={styles.chartRank}>{item.rank}</ThemedText>
-            <View style={styles.chartThumb} />
-            <View style={styles.chartInfo}>
-              <ThemedText style={styles.chartTitle}>{item.title}</ThemedText>
-              <ThemedText style={styles.chartArtist}>{item.artist}</ThemedText>
-            </View>
-            <TouchableOpacity style={styles.chartPlayBtn}>
-              <View style={styles.chartPlayTriangle} />
+        {topCharts.map((item, index) => {
+          const accent = RELEASE_CARD_COLORS[index % RELEASE_CARD_COLORS.length];
+
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.chartRow}
+              activeOpacity={0.85}
+              onPress={() => openTrack(item, accent)}
+            >
+              <ThemedText style={styles.chartRank}>{index + 1}</ThemedText>
+              {getTrackArtwork(item) ? (
+                <Image source={{ uri: getTrackArtwork(item) }} style={styles.chartThumb} contentFit="cover" />
+              ) : (
+                <View style={styles.chartThumb} />
+              )}
+              <View style={styles.chartInfo}>
+                <ThemedText style={styles.chartTitle} numberOfLines={1}>
+                  {item.title}
+                </ThemedText>
+                <ThemedText style={styles.chartArtist} numberOfLines={1}>
+                  {item.user?.name ?? 'Unknown Artist'} • {formatCompactNumber(item.play_count)} plays
+                </ThemedText>
+              </View>
+              <TouchableOpacity style={styles.chartPlayBtn} onPress={() => openTrack(item, accent)}>
+                <View style={styles.chartPlayTriangle} />
+              </TouchableOpacity>
             </TouchableOpacity>
-          </TouchableOpacity>
-        ))}
+          );
+        })}
+
+        {tracksPending && !topCharts.length && (
+          <View style={styles.feedbackRow}>
+            <ActivityIndicator color="#FFFFFF" />
+          </View>
+        )}
+
+        {tracksError && !topCharts.length && (
+          <ThemedText style={styles.feedbackText}>Failed to load Audius charts.</ThemedText>
+        )}
       </View>
     </ScrollView>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -171,7 +348,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
     marginTop: 40,
-    paddingTop: 40
+    paddingTop: 40,
   },
   heroTitle: {
     fontSize: 28,
@@ -236,10 +413,24 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'flex-end',
     padding: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  releaseImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  releaseOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
+  releaseArtist: {
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 12,
+    marginBottom: 6,
   },
   releaseCardBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     gap: 6,
   },
   releaseTitle: {
@@ -274,6 +465,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 10,
+    overflow: 'hidden',
   },
   playlistInfo: {
     flex: 1,
@@ -315,6 +507,7 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 8,
     backgroundColor: '#2A2A2A',
+    overflow: 'hidden',
   },
   chartInfo: {
     flex: 1,
@@ -347,5 +540,15 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
     borderLeftColor: '#FFFFFF',
     marginLeft: 2,
+  },
+  feedbackRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+  },
+  feedbackText: {
+    color: '#8A8A8A',
+    fontSize: 13,
+    paddingTop: 6,
   },
 });
