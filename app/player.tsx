@@ -8,6 +8,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   GestureResponderEvent,
   Image,
   LayoutChangeEvent,
@@ -26,8 +27,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { usePlayer, type PlayerTrack } from '@/context/player';
+import { useFavoriteTracks } from '@/hooks/use-favorite-tracks';
 import { usePlaylistTracks } from '@/hooks/use-playlists';
 import { type AudiusTrack } from '@/lib/audius';
+import { createFavoriteTrackInput } from '@/lib/favorite-tracks-store';
 
 const SHEET_COLLAPSED_HEIGHT = 52;
 const SHEET_MID_HEIGHT = 430;
@@ -38,13 +41,13 @@ const SHEET_TOP_GAP = 24;
 const QUEUE_ACCENT_COLORS = ['#d50000', '#29b6f6', '#a1887f', '#b39ddb', '#ff5c68', '#ffe0c7'];
 
 const PLAYER_ACTIONS = [
-  { icon: 'add-circle-outline' as const, label: 'Add to Playlist' },
-  { icon: 'person-outline' as const, label: 'Artist' },
-  { icon: 'albums-outline' as const, label: 'Album' },
-  { icon: 'thumbs-down-outline' as const, label: "I don’t like it" },
-  { icon: 'document-text-outline' as const, label: 'Song lyrics' },
-  { icon: 'download-outline' as const, label: 'Download' },
-];
+  { key: 'favorite', icon: 'bookmark-outline' as const, label: 'Add to favorites' },
+  { key: 'artist', icon: 'person-outline' as const, label: 'Artist' },
+  { key: 'album', icon: 'albums-outline' as const, label: 'Album' },
+  { key: 'dislike', icon: 'thumbs-down-outline' as const, label: "I don’t like it" },
+  { key: 'lyrics', icon: 'document-text-outline' as const, label: 'Song lyrics' },
+  { key: 'download', icon: 'download-outline' as const, label: 'Download' },
+] as const;
 
 type PlayerSheetMode = 'actions' | 'queue';
 
@@ -198,6 +201,7 @@ export default function PlayerScreen() {
     }>();
 
   const player = usePlayer();
+  const { favoriteIds, isFavoritePending, toggleFavoriteTrack } = useFavoriteTracks();
   const sheetRef = useRef<BottomSheet>(null);
   const [sheetMode, setSheetMode] = useState<PlayerSheetMode>('actions');
   const [sheetIndex, setSheetIndex] = useState(-1);
@@ -223,6 +227,8 @@ export default function PlayerScreen() {
   const activeArtist = activeTrack.artist;
   const activeArtwork = activeTrack.artworkUrl;
   const activePlaylistName = activeTrack.playlistName ?? playlistName ?? '';
+  const isFavorite = !!activeTrackId && favoriteIds.has(activeTrackId);
+  const favoritePending = !!activeTrackId && isFavoritePending(activeTrackId);
   const activeDuration = player.durationSec > 0
     ? player.durationSec
     : activeTrack.duration;
@@ -359,6 +365,29 @@ export default function PlayerScreen() {
     await player.playTrack(playerTrack);
   }
 
+  async function handleToggleFavoriteTrack() {
+    if (!activeTrackId) {
+      return;
+    }
+
+    try {
+      await toggleFavoriteTrack(
+        createFavoriteTrackInput({
+          id: activeTrackId,
+          title: activeTitle,
+          artist: activeArtist,
+          artworkUrl: activeArtwork,
+          duration: activeDuration,
+          color: bgColor,
+          playlistName: activePlaylistName,
+          playlistId: activeTrack.playlistId ?? playlistId ?? '',
+        })
+      );
+    } catch {
+      Alert.alert('Favorite failed', 'Unable to update this track in favorites right now.');
+    }
+  }
+
   return (
     <View style={styles.root}>
       {/* Blurred artwork background */}
@@ -420,8 +449,12 @@ export default function PlayerScreen() {
 
           {/* Bookmark row above controls */}
           <View style={styles.bookmarkRow}>
-            <TouchableOpacity style={styles.bookmarkCircle}>
-              <Ionicons name="bookmark" size={20} color="#fff" />
+            <TouchableOpacity
+              style={[styles.bookmarkCircle, favoritePending && styles.iconButtonDisabled]}
+              disabled={favoritePending}
+              onPress={() => void handleToggleFavoriteTrack()}
+            >
+              <Ionicons name={isFavorite ? 'bookmark' : 'bookmark-outline'} size={20} color="#fff" />
             </TouchableOpacity>
           </View>
 
@@ -538,8 +571,12 @@ export default function PlayerScreen() {
           ) : (
             <View>
               <View style={styles.sheetHeaderRow}>
-                <TouchableOpacity style={styles.sheetIconBtn}>
-                  <Ionicons name="bookmark-outline" size={22} color="#fff" />
+                <TouchableOpacity
+                  style={[styles.sheetIconBtn, favoritePending && styles.iconButtonDisabled]}
+                  disabled={favoritePending}
+                  onPress={() => void handleToggleFavoriteTrack()}
+                >
+                  <Ionicons name={isFavorite ? 'bookmark' : 'bookmark-outline'} size={22} color="#fff" />
                 </TouchableOpacity>
 
                 {activeArtwork ? (
@@ -570,9 +607,21 @@ export default function PlayerScreen() {
 
               <View style={styles.sheetActionList}>
                 {PLAYER_ACTIONS.map((action) => (
-                  <TouchableOpacity key={action.label} style={styles.sheetActionRow} activeOpacity={0.8}>
+                  <TouchableOpacity
+                    key={action.label}
+                    style={styles.sheetActionRow}
+                    activeOpacity={0.8}
+                    onPress={action.key === 'favorite' ? () => void handleToggleFavoriteTrack() : undefined}
+                    disabled={action.key === 'favorite' && favoritePending}
+                  >
                     <Ionicons name={action.icon} size={22} color="#fff" />
-                    <ThemedText style={styles.sheetActionLabel}>{action.label}</ThemedText>
+                    <ThemedText style={styles.sheetActionLabel}>
+                      {action.key === 'favorite'
+                        ? isFavorite
+                          ? 'Remove from favorites'
+                          : action.label
+                        : action.label}
+                    </ThemedText>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -775,6 +824,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  iconButtonDisabled: {
+    opacity: 0.55,
   },
   sheetArtwork: {
     width: 56,

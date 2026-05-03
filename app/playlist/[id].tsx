@@ -1,33 +1,35 @@
 import { Ionicons } from '@expo/vector-icons';
 import BottomSheet, {
-    BottomSheetView,
-    type BottomSheetHandleProps,
+  BottomSheetView,
+  type BottomSheetHandleProps,
 } from '@gorhom/bottom-sheet';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import Animated, {
-    Extrapolation,
-    interpolate,
-    interpolateColor,
-    useAnimatedStyle,
+  Extrapolation,
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
 } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { useFavoritePlaylists } from '@/hooks/use-favorite-playlists';
+import { useFavoriteTracks } from '@/hooks/use-favorite-tracks';
 import { usePlaylistTracks } from '@/hooks/use-playlists';
 import { type AudiusTrack } from '@/lib/audius';
 import { buildFavoritePlaylistMeta } from '@/lib/favorite-playlists';
+import { createFavoriteTrackInput } from '@/lib/favorite-tracks-store';
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -51,12 +53,30 @@ const SHEET_HANDLE_TOP_SPACING = 10;
 type TrackItemProps = {
   track: AudiusTrack;
   index: number;
+  isMenuOpen: boolean;
+  isFavorite: boolean;
   onPress: () => void;
+  onMorePress: () => void;
+  onAddToFavorites: () => void;
+  onDownload: () => void;
 };
 
-function TrackItem({ track, index, onPress }: TrackItemProps) {
+function TrackItem({
+  track,
+  index,
+  isMenuOpen,
+  isFavorite,
+  onPress,
+  onMorePress,
+  onAddToFavorites,
+  onDownload,
+}: TrackItemProps) {
   return (
-    <TouchableOpacity style={styles.trackRow} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={[styles.trackRow, isMenuOpen && styles.trackRowMenuOpen]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
       <View style={styles.trackIndex}>
         <ThemedText style={styles.trackIndexText}>{index + 1}</ThemedText>
       </View>
@@ -72,9 +92,46 @@ function TrackItem({ track, index, onPress }: TrackItemProps) {
         <ThemedText style={styles.trackDuration}>
           {formatDuration(track.duration)}
         </ThemedText>
-        <TouchableOpacity style={styles.trackMore} hitSlop={8}>
+        <TouchableOpacity
+          style={styles.trackMore}
+          hitSlop={8}
+          onPress={(event) => {
+            event.stopPropagation();
+            onMorePress();
+          }}
+        >
           <Ionicons name="ellipsis-horizontal" size={18} color="rgba(255,255,255,0.5)" />
         </TouchableOpacity>
+
+        {isMenuOpen && (
+          <View style={styles.trackMenu}>
+            <TouchableOpacity
+              style={styles.trackMenuItem}
+              activeOpacity={0.75}
+              onPress={(event) => {
+                event.stopPropagation();
+                onAddToFavorites();
+              }}
+            >
+              <ThemedText style={styles.trackMenuText}>
+                {isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              </ThemedText>
+            </TouchableOpacity>
+
+            <View style={styles.trackMenuDivider} />
+
+            <TouchableOpacity
+              style={styles.trackMenuItem}
+              activeOpacity={0.75}
+              onPress={(event) => {
+                event.stopPropagation();
+                onDownload();
+              }}
+            >
+              <ThemedText style={styles.trackMenuText}>Download</ThemedText>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -115,6 +172,7 @@ function PlaylistSheetHandle({
 
 export default function PlaylistDetailScreen() {
   const { bottom: bottomInset } = useSafeAreaInsets();
+  const [openTrackMenuId, setOpenTrackMenuId] = useState<string | null>(null);
   const { id, name, color, accent, artworkUrl, trackCount, totalPlayCount, description } = useLocalSearchParams<{
     id: string;
     name: string;
@@ -132,6 +190,7 @@ export default function PlaylistDetailScreen() {
   const { data: tracks, isPending, isError } = usePlaylistTracks(id);
   const { data: favoritePlaylists, favoriteIds, isBookmarkPending, toggleFavoritePlaylist } =
     useFavoritePlaylists();
+  const { favoriteIds: favoriteTrackIds, toggleFavoriteTrack } = useFavoriteTracks();
 
   const existingFavoritePlaylist = favoritePlaylists.find((playlist) => playlist.id === id);
 
@@ -176,6 +235,38 @@ export default function PlaylistDetailScreen() {
       );
     } catch {
       Alert.alert('Bookmark failed', 'Unable to update this playlist bookmark right now.');
+    }
+  }
+
+  function handleTrackOptions(trackId: string) {
+    setOpenTrackMenuId((currentId) => (currentId === trackId ? null : trackId));
+  }
+
+  function closeTrackMenu() {
+    setOpenTrackMenuId(null);
+  }
+
+  function handleTrackMenuAction() {
+    closeTrackMenu();
+  }
+
+  async function handleAddTrackToFavorites(track: AudiusTrack) {
+    try {
+      await toggleFavoriteTrack(
+        createFavoriteTrackInput({
+          id: track.id,
+          title: track.title,
+          artist: track.user?.name ?? 'Unknown Artist',
+          artworkUrl: track.artwork?.['480x480'] ?? track.artwork?.['150x150'] ?? artworkUrl ?? '',
+          duration: track.duration,
+          color: gradientTop,
+          playlistName: name ?? '',
+          playlistId: id ?? '',
+        })
+      );
+      closeTrackMenu();
+    } catch {
+      Alert.alert('Favorite failed', 'Unable to update this track in favorites right now.');
     }
   }
 
@@ -263,24 +354,33 @@ export default function PlaylistDetailScreen() {
             <TrackItem
               track={item}
               index={index}
+              isMenuOpen={openTrackMenuId === item.id}
+              isFavorite={favoriteTrackIds.has(item.id)}
+              onMorePress={() => handleTrackOptions(item.id)}
+              onAddToFavorites={() => void handleAddTrackToFavorites(item)}
+              onDownload={handleTrackMenuAction}
               onPress={() =>
-                router.push({
-                  pathname: '/player',
-                  params: {
-                    playlistId: id,
-                    trackId: item.id,
-                    trackTitle: item.title,
-                    trackArtist: item.user?.name ?? 'Unknown Artist',
-                    trackDuration: String(item.duration),
-                    artworkUrl: item.artwork?.['480x480'] ?? artworkUrl ?? '',
-                    playlistName: name ?? '',
-                    color: gradientTop,
-                  },
-                })
+                (() => {
+                  closeTrackMenu();
+                  router.push({
+                    pathname: '/player',
+                    params: {
+                      playlistId: id,
+                      trackId: item.id,
+                      trackTitle: item.title,
+                      trackArtist: item.user?.name ?? 'Unknown Artist',
+                      trackDuration: String(item.duration),
+                      artworkUrl: item.artwork?.['480x480'] ?? artworkUrl ?? '',
+                      playlistName: name ?? '',
+                      color: gradientTop,
+                    },
+                  });
+                })()
               }
             />
           )}
           contentContainerStyle={styles.trackList}
+          onScrollBeginDrag={closeTrackMenu}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -439,6 +539,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
   },
+  trackRowMenuOpen: {
+    zIndex: 10,
+  },
   trackIndex: {
     width: 34,
     height: 34,
@@ -469,6 +572,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   trackRight: {
+    position: 'relative',
     alignItems: 'flex-end',
     gap: 4,
   },
@@ -478,6 +582,35 @@ const styles = StyleSheet.create({
   },
   trackMore: {
     padding: 2,
+  },
+  trackMenu: {
+    position: 'absolute',
+    top: 26,
+    right: -6,
+    minWidth: 154,
+    borderRadius: 14,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
+  },
+  trackMenuItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  trackMenuText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  trackMenuDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   centered: {
     flex: 1,
